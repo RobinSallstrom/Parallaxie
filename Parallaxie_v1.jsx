@@ -1,5 +1,5 @@
 // ============================================================================
-// PARALLAXIE v1.0
+// PARALLAXIE v1.4
 // 2.5D parallax rig-and-animate panel for After Effects
 // Robin Sallstrom x Claude - 2026 - successor to Z Space Controller v2
 //
@@ -11,7 +11,7 @@
 (function parallaxie(thisObj) {
 
     // ------------------------------------------------------------ constants
-    var VERSION = "1.2";
+    var VERSION = "1.4";
     var FX_TOKEN = "_FX";              // layers containing this ride co-planar
     var NAME_RX = /^(\d\d)_/;          // plane naming convention 01_ ... 0N_
     var CAM_NAME = "PXE_Camera";
@@ -26,11 +26,15 @@
     var MOVES = ["Push-In", "Pull-Back", "Drift L", "Drift R", "Rise", "Sink"];
 
     // ------------------------------------------------------------ expressions
+    // Projection multiplies the layer's OWN scale (defect #1 fix): a layer at
+    // 268% stays at 268% on screen, not 100%. value is the property's pre-
+    // expression scale, so x/y are preserved independently and z untouched.
+    // At z=0 the factor is 1, so frame 0 is byte-identical to the flat art.
     var SCALE_EXPR =
         "cam = thisComp.activeCamera;\n" +
         "z = effect(\"" + EFX_Z + "\")(\"Slider\");\n" +
-        "f = ((cam.zoom + z) / cam.zoom) * 100;\n" +
-        "[f, f, 100];";
+        "f = (cam.zoom + z) / cam.zoom;\n" +
+        "[value[0] * f, value[1] * f, value[2]];";
 
     var POS_EXPR =
         "z = effect(\"" + EFX_Z + "\")(\"Slider\");\n" +
@@ -86,7 +90,7 @@
     }
 
     // How the NN_ numbering runs relative to AE stacking order.
-    // "back-to-front" = 01 at the bottom = farthest  (the 01_SKY house convention)
+    // "back-to-front" = 01 at the bottom = farthest  (the 01_SKY convention)
     // "front-to-back" = 01 at the top    = nearest   (inverse; common in export stacks)
     function nameStackRelation(comp) {
         var p = planesOnly(comp);
@@ -328,7 +332,7 @@
         return "OK";
     };
 
-    // Bulk depth setter: PXE.setDepths({"09_CHAR_THAROK":0, "01_SKY":4000})
+    // Bulk depth setter: PXE.setDepths({"09_HERO":0, "01_SKY":4000})
     // Art direction beats even spacing; this is how you place heroes deliberately.
     PXE.setDepths = function (map) {
         var comp = activeComp(); if (!comp) return "ERROR: no comp";
@@ -345,10 +349,116 @@
         return "OK: set " + ok + " depth(s)" + (miss.length ? "; not rigged: " + miss.join(", ") : "");
     };
 
+    // ---- Selection-based build + adopt (v1.3) --------------------------------
+    // The "default door": rig the SELECTED layers with no manual renaming.
+    // Layers lacking the NN_ prefix are renamed in place (prefix prepended,
+    // original name kept; bottom of the selection = 01 = farthest, the 01_SKY
+    // convention), then the normal Build runs with stacking order driving
+    // depth. Membership stays name-based until rig identity moves to
+    // tags/layer.id (review #16), so the rename is what makes every
+    // downstream op see the plane.
+    PXE.buildFromSelection = function (far) {
+        var comp = activeComp(); if (!comp) return "ERROR: no active comp";
+        var sel = comp.selectedLayers, cand = [], i, l;
+        for (i = 0; i < sel.length; i++) {
+            l = sel[i];
+            if (isCamOrLight(l) || isFog(l)) continue;
+            cand.push(l);
+        }
+        if (cand.length === 0)
+            return "ERROR: no layers selected - select the plane layers in the timeline, then build from selection";
+        if (cand.length > 99)
+            return "ERROR: " + cand.length + " layers selected; the NN_ prefix caps at 99 planes";
+        cand.sort(function (a, b) { return b.index - a.index; }); // bottom first = 01 = farthest
+        // NN_ planes outside the selection will rig too - count them for the report
+        var inSel = {}, outside = 0, pre = planesOnly(comp);
+        for (i = 0; i < cand.length; i++) inSel[cand[i].index] = true;
+        for (i = 0; i < pre.length; i++) if (!inSel[pre[i].layer.index]) outside++;
+        var renamed = [];
+        app.beginUndoGroup("PXE Build from Selection");
+        try {
+            for (i = 0; i < cand.length; i++) {
+                l = cand[i];
+                if (nameNum(l) !== null) continue;
+                var nn = ((i + 1) < 10 ? "0" : "") + (i + 1);
+                renamed.push(l.name + " -> " + nn + "_" + l.name);
+                l.name = nn + "_" + l.name;
+            }
+            var r = PXE.buildFromComp(far, { order: "stack" });
+            var extra = [];
+            if (renamed.length)
+                extra.push("NOTE renamed " + renamed.length + " layer(s) to the NN_ convention: " + renamed.join(", "));
+            if (outside > 0)
+                extra.push("NOTE " + outside + " NN_ plane(s) outside the selection were rigged too (plane membership is by name)");
+            return r + (extra.length ? "\n" + extra.join("\n") : "");
+        } catch (errS) { return "ERROR: " + errS.toString(); }
+        finally { app.endUndoGroup(); }
+    };
+
+    // Depth guess for an adopted layer: the nearest rigged non-FX plane BELOW
+    // it in the stack (where the artist visually placed it), else the nearest
+    // above, else half of far.
+    function inheritDepth(comp, l) {
+        var j, c;
+        for (j = l.index + 1; j <= comp.numLayers; j++) {
+            c = comp.layer(j);
+            if (!isCamOrLight(c) && c.enabled && !isFx(c) && !isFog(c) && isRigged(c)) return getZ(c);
+        }
+        for (j = l.index - 1; j >= 1; j--) {
+            c = comp.layer(j);
+            if (!isCamOrLight(c) && c.enabled && !isFx(c) && !isFog(c) && isRigged(c)) return getZ(c);
+        }
+        return PXE.far / 2;
+    }
+    // Two-digit prefix ranked by depth among rigged planes (01 = farthest),
+    // so the name metadata stays roughly monotonic with the scene.
+    function depthRankPrefix(comp, z) {
+        var p = planesOnly(comp), farther = 0, i;
+        for (i = 0; i < p.length; i++)
+            if (isRigged(p[i].layer) && getZ(p[i].layer) > z) farther++;
+        var n = farther + 1; if (n > 99) n = 99;
+        return (n < 10 ? "0" : "") + n;
+    }
+
+    // Adopt: add the SELECTED layers to an existing rig without a rebuild
+    // (rebuild resets every depth; adopt disturbs nothing). z overrides the
+    // inherited depth for ALL adopted layers; omit it to inherit per layer.
+    PXE.adoptSelected = function (z) {
+        var comp = activeComp(); if (!comp) return "ERROR: no active comp";
+        if (riggedLayers(comp).length === 0)
+            return "ERROR: no rig in this comp - run Build first, then adopt extra layers";
+        var sel = comp.selectedLayers, cand = [], skipped = [], i, l;
+        for (i = 0; i < sel.length; i++) {
+            l = sel[i];
+            if (isCamOrLight(l) || isFog(l)) continue;
+            if (isRigged(l)) { skipped.push(l.name + " (already rigged)"); continue; }
+            if (!l.enabled) { skipped.push(l.name + " (hidden)"); continue; }
+            cand.push(l);
+        }
+        if (cand.length === 0)
+            return "ERROR: nothing to adopt - select unrigged layer(s) in the timeline" +
+                   (skipped.length ? ". Skipped: " + skipped.join(", ") : "");
+        cand.sort(function (a, b) { return b.index - a.index; }); // bottom first
+        var done = [];
+        app.beginUndoGroup("PXE Adopt Layers");
+        try {
+            for (i = 0; i < cand.length; i++) {
+                l = cand[i];
+                var depth = (typeof z === "number" && !isNaN(z)) ? z : inheritDepth(comp, l);
+                if (nameNum(l) === null) l.name = depthRankPrefix(comp, depth) + "_" + l.name;
+                rigLayer(comp, l, depth);
+                done.push(l.name + " (z=" + Math.round(depth) + ")");
+            }
+            return "OK: adopted " + done.length + " layer(s): " + done.join(", ") +
+                   (skipped.length ? "\nWARN skipped: " + skipped.join(", ") : "");
+        } catch (errA) { return "ERROR: " + errA.toString(); }
+        finally { app.endUndoGroup(); }
+    };
+
     // Distribute by STACKING ORDER (bottom = farthest).  [ZSC bug #2 fix]
     // v1.1: optional bias exponent. 1 = even. >1 clusters planes toward camera
     // and pushes the depth budget to the back - which is what you want when
-    // three heroes share one leap and the scenery needs the room.
+    // several hero planes need fine separation and the scenery can take the rest.
     PXE.distribute = function (near, far, bias) {
         var comp = activeComp(); if (!comp) return "ERROR: no comp";
         if (near === undefined) near = 0;
@@ -520,7 +630,10 @@
                 var bp = null;
                 try { bp = l.effect(EFX_BP)("Point").value; } catch (e) {}
                 unrigLayer(l);
-                l.scale.setValue([100, 100, 100]);
+                // Scale is left at its captured base value: the rig expression
+                // never wrote to the scale property, so clearing it already
+                // restores the original scale (100% or otherwise). Forcing 100
+                // here discarded a scaled layer's real size - that was defect #1.
                 if (bp) l.position.setValue([bp[0], bp[1], 0]);
                 l.threeDLayer = false; n++;
             }
@@ -560,20 +673,24 @@
 
     // BANDS: reveal width per cut, for a given move. Replaces hand arithmetic.
     // Lateral moves expose a strip; push/pull expose radially and the two are NOT
-    // the same formula. The doc shorthand d*(zf-zn)/(zoom+zf) is the lateral case
+    // the same formula. The common shorthand d*(zf-zn)/(zoom+zf) is the lateral case
     // with z_near ~ 0 - it is wrong for interior cuts and meaningless for a push.
-    PXE.bands = function (moveType, strengthPct) {
-        var comp = activeComp(); if (!comp) return "ERROR: no comp";
+    // bandsCore returns { text, data } so PXE.call can hand the numbers to a UI;
+    // PXE.bands keeps the original string contract, byte for byte.
+    function bandsCore(moveType, strengthPct) {
+        var comp = activeComp(); if (!comp) return { text: "ERROR: no comp", data: null };
         if (!moveType) moveType = "Push-In";
         var s = (strengthPct === undefined ? 5 : strengthPct) / 100;
         var p = planesOnly(comp), rig = [], i;
         for (i = 0; i < p.length; i++) if (isRigged(p[i].layer)) rig.push(p[i].layer);
-        if (rig.length < 2) return "ERROR: need 2+ rigged planes";
+        if (rig.length < 2) return { text: "ERROR: need 2+ rigged planes", data: null };
         rig.sort(function (a, b) { return getZ(a) - getZ(b); });   // near -> far
 
         var zm = zoomPx(comp), out = [], radial = isRadial(moveType);
         var dz = dollyFor(comp, moveType, s), d = lateralFor(comp, moveType, s);
         var rMax = Math.sqrt(comp.width * comp.width + comp.height * comp.height) / 2;
+        var data = { move: moveType, strengthPct: s * 100, radial: radial, zoom: zm,
+                     dolly: dz, lateral: d, cuts: [], totalPx: 0, totalPctOfWidth: 0 };
 
         out.push("bands: " + moveType + " " + (s * 100) + "%   comp " + comp.width + "x" +
                  comp.height + "   zoom " + Math.round(zm));
@@ -586,30 +703,40 @@
             var zn = getZ(rig[i - 1]), zf = getZ(rig[i]), band;
             if (radial) band = rMax * Math.abs(magAt(zm, zn, dz) - magAt(zm, zf, dz));
             else band = Math.abs(d) * zm * (zf - zn) / ((zm + zn) * (zm + zf));
+            data.cuts.push({ nearName: rig[i - 1].name, farName: rig[i].name,
+                             zNear: zn, zFar: zf, bandPx: band });
             out.push("  " + rig[i - 1].name + " (z" + Math.round(zn) + ") -> " +
                      rig[i].name + " (z" + Math.round(zf) + "):  " + Math.round(band) + " px");
         }
         var z0 = getZ(rig[0]), zN = getZ(rig[rig.length - 1]), tot;
         if (radial) tot = rMax * Math.abs(magAt(zm, z0, dz) - magAt(zm, zN, dz));
         else tot = Math.abs(d) * zm * (zN - z0) / ((zm + z0) * (zm + zN));
+        data.totalPx = tot;
+        data.totalPctOfWidth = 100 * tot / comp.width;
         out.push("  near->far total: " + Math.round(tot) + " px = " +
                  (100 * tot / comp.width).toFixed(2) + "% of comp width");
         if (radial)
             out.push("  NOTE push/pull exposes only on centre-facing edges; edges facing" +
                      " away from centre are covered, not revealed.");
-        return out.join("\n");
-    };
+        return { text: out.join("\n"), data: data };
+    }
+    PXE.bands = function (moveType, strengthPct) { return bandsCore(moveType, strengthPct).text; };
 
     // CHECKMOVE: will this move pull empty canvas into frame? Answers per plane,
     // and reports the strength at which each one first fails.
-    PXE.checkMove = function (moveType, strengthPct) {
-        var comp = activeComp(); if (!comp) return "ERROR: no comp";
+    // checkMoveCore returns { text, data } so PXE.call can hand the per-plane
+    // numbers to a UI; PXE.checkMove keeps the original string contract.
+    function checkMoveCore(moveType, strengthPct) {
+        var comp = activeComp(); if (!comp) return { text: "ERROR: no comp", data: null };
         if (!moveType) moveType = "Push-In";
         var s = (strengthPct === undefined ? 5 : strengthPct) / 100;
         var rig = riggedLayers(comp), zm = zoomPx(comp), out = [], bad = 0, i;
         var dz = dollyFor(comp, moveType, s), d = lateralFor(comp, moveType, s);
         var cx = comp.width / 2, cy = comp.height / 2, radial = isRadial(moveType);
         var limit = Infinity, limitBy = "";
+        var data = { move: moveType, strengthPct: s * 100, radial: radial, zoom: zm,
+                     riggedCount: rig.length, cutouts: 0, clear: true, exposes: [],
+                     firstFailurePct: null, firstFailureLayer: null };
 
         out.push("checkMove: " + moveType + " " + (s * 100) + "% on " + rig.length + " rigged layer(s)");
         var cutouts = 0;
@@ -639,6 +766,7 @@
             var worst = Math.min(gapL, gapT, gapR, gapB);
             if (worst < 0) {
                 bad++;
+                data.exposes.push({ name: l.name, z: z, px: -worst });
                 out.push("  EXPOSES  " + l.name + " (z" + Math.round(z) + "): " +
                          Math.round(-worst) + " px of empty canvas");
             }
@@ -647,26 +775,36 @@
                 // Camera left  -> content right -> the LEFT edge is uncovered.
                 // The margin that matters is on the edge the move actually exposes.
                 var sh = Math.abs(d) * zm / (zm + z);
-                var margin = (moveType === "Drift L") ? gapL + sh
-                          : (moveType === "Drift R") ? gapR + sh
-                          : (moveType === "Rise") ? gapT + sh
-                          : gapB + sh;
+                // ExtendScript parses chained ternaries left-associatively
+                // ((a?b:c)?d:e), which silently picked the Rise edge for every
+                // move - this must stay if/else (or fully parenthesized).
+                var margin;
+                if (moveType === "Drift L") margin = gapL + sh;
+                else if (moveType === "Drift R") margin = gapR + sh;
+                else if (moveType === "Rise") margin = gapT + sh;
+                else margin = gapB + sh;
                 var span = (moveType === "Drift L" || moveType === "Drift R") ? comp.width : comp.height;
                 var sMax = margin * (zm + z) / (zm * span);
                 if (sMax < limit) { limit = sMax; limitBy = l.name; }
             }
         }
+        data.cutouts = cutouts;
+        data.clear = (bad === 0);
         if (cutouts) out.push("  (" + cutouts + " cut-out plane(s) skipped - not full-frame plates)");
         if (!bad) out.push("  CLEAR - no full-frame plate loses coverage at this strength");
         if (radial && moveType === "Push-In")
             out.push("  push-in scales every plane outward from centre: margin grows monotonically, no failure percentage");
-        else if (limit !== Infinity)
+        else if (limit !== Infinity) {
+            data.firstFailurePct = limit * 100;
+            data.firstFailureLayer = limitBy;
             out.push("  first failure at " + (limit * 100).toFixed(1) + "% (" + limitBy + ")");
-        return out.join("\n");
-    };
+        }
+        return { text: out.join("\n"), data: data };
+    }
+    PXE.checkMove = function (moveType, strengthPct) { return checkMoveCore(moveType, strengthPct).text; };
 
     // PREFLIGHT: everything that will silently ruin a build, reported BEFORE you
-    // spend a render or a Firefly credit. Run this first, every time.
+    // spend a render. Run this first, every time.
     PXE.preflight = function () {
         var comp = activeComp(); if (!comp) return "ERROR: no active comp";
         var out = [], i;
@@ -702,6 +840,17 @@
         if (split.length)
             out.push("WARN     2D layer(s) inside the 3D stack break depth sorting: " + split.join(", "));
 
+        var keyed = [];
+        for (i = 0; i < planes.length; i++) {
+            var kl = planes[i].layer, nk = 0;
+            try { nk = kl.position.numKeys + kl.scale.numKeys; } catch (eNK) {}
+            if (nk > 0) keyed.push(kl.name);
+        }
+        if (keyed.length)
+            out.push("WARN     position/scale keyframes on: " + keyed.join(", ") +
+                     " - Build reads the value at the current frame; Bake/Reset do" +
+                     " not yet handle keyed transforms cleanly (debt #3, still open).");
+
         var badFog = misstackedFog(comp);
         if (badFog.length)
             out.push("WARN     fog card(s) stacked in front of nearer planes: " + badFog.join(", "));
@@ -733,17 +882,284 @@
         return "OK: " + (moved.length ? moved.join(", ") : "nothing to move");
     };
 
-    PXE.status = function () {
-        var comp = activeComp(); if (!comp) return "no active comp";
-        var rig = riggedLayers(comp), rows = [];
-        for (var i = 0; i < rig.length; i++)
+    // statusCore returns { text, data } so PXE.call can hand the fields to a UI;
+    // PXE.status keeps the original string contract.
+    function statusCore() {
+        var comp = activeComp(); if (!comp) return { text: "no active comp", data: null };
+        var rig = riggedLayers(comp), rows = [], layers = [];
+        for (var i = 0; i < rig.length; i++) {
             rows.push(rig[i].name + " z=" + Math.round(getZ(rig[i])) +
                       " scale=" + Math.round(rig[i].scale.value[0] * 10) / 10);
+            layers.push({ name: rig[i].name, z: getZ(rig[i]), scale: rig[i].scale.value[0] });
+        }
         var ctrl = findLayer(comp, NULL_NAME);
         var keys = ctrl ? ctrl.position.numKeys : 0;
-        return "comp=" + comp.name + " " + comp.width + "x" + comp.height +
-               " cam=" + (findLayer(comp, CAM_NAME) ? "yes" : "no") +
+        var hasCam = findLayer(comp, CAM_NAME) !== null;
+        var text = "comp=" + comp.name + " " + comp.width + "x" + comp.height +
+               " cam=" + (hasCam ? "yes" : "no") +
                " moveKeys=" + keys + "\n" + rows.join("\n");
+        return { text: text, data: { comp: comp.name, width: comp.width, height: comp.height,
+                 cam: hasCam, moveKeys: keys, layers: layers } };
+    }
+    PXE.status = function () { return statusCore().text; };
+
+    // ------------------------------------------------------------ JSON (ES3)
+    // ExtendScript is ES3: there is no native JSON object. Hand-rolled encoder
+    // and recursive-descent parser, no eval anywhere. Encoder output is
+    // ASCII-safe: every character outside 0x20..0x7E is emitted as \uXXXX.
+    function jsonHex4(cc) {
+        var h = cc.toString(16);
+        while (h.length < 4) h = "0" + h;
+        return "\\u" + h;
+    }
+    function jsonQuote(str) {
+        str = String(str);
+        var out = "\"", i, c, cc;
+        for (i = 0; i < str.length; i++) {
+            c = str.charAt(i); cc = str.charCodeAt(i);
+            if (c === "\"") out += "\\\"";
+            else if (c === "\\") out += "\\\\";
+            else if (c === "\n") out += "\\n";
+            else if (c === "\r") out += "\\r";
+            else if (c === "\t") out += "\\t";
+            else if (c === "\b") out += "\\b";
+            else if (c === "\f") out += "\\f";
+            else if (cc < 32 || cc > 126) out += jsonHex4(cc);
+            else out += c;
+        }
+        return out + "\"";
+    }
+    function jsonEncode(v) {
+        if (v === null || v === undefined) return "null";
+        var t = typeof v;
+        if (t === "number") return isFinite(v) ? String(v) : "null";
+        if (t === "boolean") return v ? "true" : "false";
+        if (t === "string") return jsonQuote(v);
+        if (t === "function") return "null";
+        var i, parts = [];
+        if (v instanceof Array) {
+            for (i = 0; i < v.length; i++) parts.push(jsonEncode(v[i]));
+            return "[" + parts.join(",") + "]";
+        }
+        for (var k in v) {
+            if (!v.hasOwnProperty(k)) continue;
+            var val = v[k];
+            if (val === undefined || typeof val === "function") continue;
+            parts.push(jsonQuote(k) + ":" + jsonEncode(val));
+        }
+        return "{" + parts.join(",") + "}";
+    }
+    function jsonParse(text) {
+        var s = String(text), pos = 0;
+        function fail(m) { throw new Error("JSON parse error at " + pos + ": " + m); }
+        function isDigit(c) { return c >= "0" && c <= "9"; }
+        function ws() {
+            while (pos < s.length) {
+                var c = s.charAt(pos);
+                if (c === " " || c === "\t" || c === "\n" || c === "\r") pos++;
+                else break;
+            }
+        }
+        function expect(word) {
+            if (s.substr(pos, word.length) !== word) fail("expected " + word);
+            pos += word.length;
+        }
+        function parseString() {
+            pos++; // opening quote
+            var out = "";
+            while (true) {
+                if (pos >= s.length) fail("unterminated string");
+                var c = s.charAt(pos++);
+                if (c === "\"") return out;
+                if (c === "\\") {
+                    var e = s.charAt(pos++);
+                    if (e === "\"") out += "\"";
+                    else if (e === "\\") out += "\\";
+                    else if (e === "/") out += "/";
+                    else if (e === "b") out += "\b";
+                    else if (e === "f") out += "\f";
+                    else if (e === "n") out += "\n";
+                    else if (e === "r") out += "\r";
+                    else if (e === "t") out += "\t";
+                    else if (e === "u") {
+                        var h = s.substr(pos, 4);
+                        if (!/^[0-9A-Fa-f]{4}$/.test(h)) fail("bad unicode escape");
+                        out += String.fromCharCode(parseInt(h, 16));
+                        pos += 4;
+                    } else fail("bad escape");
+                } else {
+                    if (c.charCodeAt(0) < 32) fail("control character in string");
+                    out += c;
+                }
+            }
+        }
+        function parseNumber() {
+            var start = pos;
+            if (s.charAt(pos) === "-") pos++;
+            if (s.charAt(pos) === "0") pos++;
+            else { if (!isDigit(s.charAt(pos))) fail("bad number"); while (isDigit(s.charAt(pos))) pos++; }
+            if (s.charAt(pos) === ".") {
+                pos++;
+                if (!isDigit(s.charAt(pos))) fail("bad number");
+                while (isDigit(s.charAt(pos))) pos++;
+            }
+            var c = s.charAt(pos);
+            if (c === "e" || c === "E") {
+                pos++;
+                c = s.charAt(pos);
+                if (c === "+" || c === "-") pos++;
+                if (!isDigit(s.charAt(pos))) fail("bad number");
+                while (isDigit(s.charAt(pos))) pos++;
+            }
+            var n = parseFloat(s.substring(start, pos));
+            if (!isFinite(n)) fail("bad number");
+            return n;
+        }
+        function parseObject() {
+            pos++; // {
+            var o = {};
+            ws();
+            if (s.charAt(pos) === "}") { pos++; return o; }
+            while (true) {
+                ws();
+                if (s.charAt(pos) !== "\"") fail("expected string key");
+                var k = parseString();
+                ws();
+                if (s.charAt(pos) !== ":") fail("expected ':'");
+                pos++;
+                o[k] = parseValue();
+                ws();
+                var c = s.charAt(pos);
+                if (c === ",") { pos++; continue; }
+                if (c === "}") { pos++; return o; }
+                fail("expected ',' or '}'");
+            }
+        }
+        function parseArray() {
+            pos++; // [
+            var a = [];
+            ws();
+            if (s.charAt(pos) === "]") { pos++; return a; }
+            while (true) {
+                a.push(parseValue());
+                ws();
+                var c = s.charAt(pos);
+                if (c === ",") { pos++; continue; }
+                if (c === "]") { pos++; return a; }
+                fail("expected ',' or ']'");
+            }
+        }
+        function parseValue() {
+            ws();
+            var c = s.charAt(pos);
+            if (c === "{") return parseObject();
+            if (c === "[") return parseArray();
+            if (c === "\"") return parseString();
+            if (c === "t") { expect("true"); return true; }
+            if (c === "f") { expect("false"); return false; }
+            if (c === "n") { expect("null"); return null; }
+            if (c === "-" || isDigit(c)) return parseNumber();
+            fail("unexpected character");
+        }
+        var v = parseValue();
+        ws();
+        if (pos < s.length) fail("trailing characters");
+        return v;
+    }
+    PXE.json = { encode: jsonEncode, parse: jsonParse };
+
+    // ------------------------------------------------------------ DISPATCHER
+    // PXE.call(jsonString) -> JSON string. Request: {"fn":"name","args":{...}}.
+    // Response: {"ok":bool,"msg":string,"warnings":[string],"data":object|null}.
+    // ok=false only when the call could not run or the engine reported ERROR;
+    // BLOCKER/WARN findings ride in warnings with ok=true. Never throws.
+    // The string-returning PXE functions above are unchanged; this is a shim
+    // over them (roadmap Phase 1; architecture review section 6.2).
+    // Contract details: docs/API_DISPATCHER.md.
+    function errResult(msg) { return { ok: false, msg: "ERROR: " + msg, warnings: [], data: null }; }
+    function resultFromString(str, data) {
+        str = String(str);
+        var lines = str.split("\n");
+        var msg = lines[0];
+        var warnings = [];
+        for (var i = 1; i < lines.length; i++) {
+            var t = lines[i].replace(/^\s+/, "");
+            if (t.indexOf("WARN") === 0 || t.indexOf("BLOCKER") === 0) warnings.push(t);
+        }
+        var ok = (msg.indexOf("ERROR") !== 0) && (msg !== "no active comp");
+        if (!ok) return { ok: false, msg: msg, warnings: warnings, data: null };
+        if (data === undefined || data === null) data = {};
+        if (data.text === undefined) data.text = str;
+        return { ok: true, msg: msg, warnings: warnings, data: data };
+    }
+    var DISPATCH = {
+        preflight:  function (a) { return resultFromString(PXE.preflight()); },
+        build:      function (a) {
+            return resultFromString(PXE.buildFromComp(a.far,
+                { order: a.order, allowHidden: a.allowHidden }));
+        },
+        buildSelected: function (a) { return resultFromString(PXE.buildFromSelection(a.far)); },
+        adoptSelected: function (a) { return resultFromString(PXE.adoptSelected(a.z)); },
+        status:     function (a) { var r = statusCore(); return resultFromString(r.text, r.data); },
+        setDepth:   function (a) {
+            if (a.layer === undefined || a.z === undefined)
+                return errResult("setDepth requires args.layer (string) and args.z (number)");
+            return resultFromString(PXE.setDepth(a.layer, a.z));
+        },
+        setDepths:  function (a) {
+            if (!a.depths || typeof a.depths !== "object")
+                return errResult("setDepths requires args.depths, a {layerName: z} map");
+            return resultFromString(PXE.setDepths(a.depths));
+        },
+        distribute: function (a) { return resultFromString(PXE.distribute(a.near, a.far, a.bias)); },
+        randomize:  function (a) { return resultFromString(PXE.randomize(a.band)); },
+        bands:      function (a) { var r = bandsCore(a.move, a.pct); return resultFromString(r.text, r.data); },
+        checkMove:  function (a) { var r = checkMoveCore(a.move, a.pct); return resultFromString(r.text, r.data); },
+        applyMove:  function (a) {
+            if (a.move === undefined)
+                return errResult("applyMove requires args.move (one of: " + MOVES.join(", ") + ")");
+            return resultFromString(PXE.applyMove(a.move, a.duration, a.pct));
+        },
+        clearMove:  function (a) { return resultFromString(PXE.clearMove()); },
+        addFog:     function (a) { return resultFromString(PXE.addFogCard(a.z, a.opacity, a.color)); },
+        restackFog: function (a) { return resultFromString(PXE.restackFog()); },
+        auditOn:    function (a) { return resultFromString(PXE.auditOn(a.layer)); },
+        auditOff:   function (a) { return resultFromString(PXE.auditOff()); },
+        bake:       function (a) { return resultFromString(PXE.bake()); },
+        reset:      function (a) { return resultFromString(PXE.reset()); },
+        version:    function (a) {
+            return { ok: true, msg: "Parallaxie " + VERSION, warnings: [],
+                     data: { version: VERSION, far: PXE.far } };
+        }
+    };
+    function validFns() {
+        var names = [], k;
+        for (k in DISPATCH) if (DISPATCH.hasOwnProperty(k)) names.push(k);
+        names.sort();
+        return names.join(", ");
+    }
+    PXE.call = function (jsonString) {
+        var res;
+        try {
+            var req = jsonParse(String(jsonString));
+            if (!req || typeof req !== "object" || req instanceof Array)
+                throw new Error("request must be a JSON object: {\"fn\":\"name\",\"args\":{}}");
+            var fn = req.fn;
+            var args = (req.args && typeof req.args === "object") ? req.args : {};
+            if (typeof fn !== "string" || !DISPATCH.hasOwnProperty(fn))
+                res = { ok: false, msg: "ERROR: unknown fn '" + fn + "'. Valid fns: " + validFns(),
+                        warnings: [], data: null };
+            else
+                res = DISPATCH[fn](args);
+        } catch (err) {
+            res = { ok: false,
+                    msg: "ERROR: " + ((err && err.message) ? err.message : String(err)),
+                    warnings: [], data: null };
+        }
+        try { return jsonEncode(res); }
+        catch (encErr) {
+            return "{\"ok\":false,\"msg\":\"ERROR: response encoding failed\",\"warnings\":[],\"data\":null}";
+        }
     };
 
     $.global.PXE = PXE;
@@ -773,6 +1189,8 @@
         ddPreset.onChange = function () { etFar.text = PRESETS[this.selection.text]; };
         var btBuild = pnlB.add("button", undefined, "BUILD FROM COMP");
         btBuild.onClick = function () { say(PXE.buildFromComp(parseFloat(etFar.text) || 5000)); refreshList(); };
+        var btBuildSel = pnlB.add("button", undefined, "BUILD FROM SELECTED");
+        btBuildSel.onClick = function () { say(PXE.buildFromSelection(parseFloat(etFar.text) || 5000)); refreshList(); };
 
         // -- DEPTH
         var pnlD = pal.add("panel", undefined, "2. Depth");
@@ -785,6 +1203,8 @@
         var btRand = rD.add("button", undefined, "Random"); btRand.preferredSize = [70, 24];
         btDist.onClick = function () { say(PXE.distribute(0, parseFloat(etFar.text) || 5000)); refreshList(); };
         btRand.onClick = function () { say(PXE.randomize(200)); refreshList(); };
+        var btAdopt = rD.add("button", undefined, "Adopt Sel"); btAdopt.preferredSize = [70, 24];
+        btAdopt.onClick = function () { say(PXE.adoptSelected()); refreshList(); };
         btRefresh.onClick = refreshList;
 
         function refreshList() {
@@ -868,6 +1288,8 @@
 // Scriptable API (after evaluating this file with $.global.PXE_HEADLESS=true):
 //   PXE.preflight()                          <-- run this FIRST, every time
 //   PXE.buildFromComp(far, {order:"stack"|"name-asc"|"name-desc", allowHidden:bool})
+//   PXE.buildFromSelection(far)   rig the SELECTED layers; auto-renames to NN_
+//   PXE.adoptSelected(z)          add selected layers to an existing rig
 //   PXE.setDepth(name, z)         PXE.setDepths({name: z, ...})
 //   PXE.distribute(near, far, bias)          bias>1 = depth budget to the back
 //   PXE.randomize(band)
@@ -879,5 +1301,10 @@
 //   PXE.auditOn(name) / PXE.auditOff()
 //   PXE.bake()                    PXE.reset()
 //   PXE.status()
+//   PXE.call(json)                structured dispatcher for UIs/bridges:
+//       '{"fn":"checkMove","args":{"move":"Drift L","pct":10}}'
+//       -> '{"ok":bool,"msg":str,"warnings":[str],"data":obj|null}'
+//       (contract + full fn list: docs/API_DISPATCHER.md)
+//   PXE.json.encode(v) / PXE.json.parse(s)   ES3-safe JSON, no eval
 // Moves: "Push-In" "Pull-Back" "Drift L" "Drift R" "Rise" "Sink"
 // ---------------------------------------------------------------------------

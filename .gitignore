@@ -1,13 +1,18 @@
-# Test fixtures and output — the smoke suite writes multi-MB PNGs here
+# Smoke-suite output: multi-MB frame PNGs written next to PXE_SmokeTest.jsx.
+# report.txt and the *_baseline_* reports are tracked; frames are not.
 _pxe_test/*.png
 _pxe_test/frames/
 
-# Proprietary art. The suite currently needs BM_Ythryn_Split_V02.psd beside
-# PXE_SmokeTest.jsx; that file is Battlemarked studio art and must never be
-# committed. See README "Known blockers" #1.
+# Never commit layered art or other binary source assets.
 *.psd
 *.psb
 
 __pycache__/
 *.pyc
 .DS_Store
+Thumbs.db
+
+# CEP panel (cep/): dependencies and build output are never committed.
+cep/node_modules/
+cep/dist/
+cep/zip/

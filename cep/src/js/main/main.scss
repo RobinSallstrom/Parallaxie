@@ -1,0 +1,333 @@
+// Parallaxie panel styles -- plain, dark, per PANEL_SPEC.md sec. 12.
+// Base surfaces in AE's range; one desaturated-blue accent; status colours
+// used only for status. No gradients, no glows.
+
+$bg: #232323;
+$surface: #2a2a2a;
+$hairline: #3a3a3a;
+$text: #d6d6d6;
+$text2: #9a9a9a;
+$accent: #5a9bd4;
+$green: #6aa84f;
+$amber: #e0a030;
+$red: #d45a5a;
+
+body {
+  margin: 0;
+  background: $bg;
+  color: $text;
+  font-family: -apple-system, "Segoe UI", sans-serif;
+  font-size: 12px;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  min-width: 320px;
+}
+
+section,
+.console {
+  background: $surface;
+  border: 1px solid $hairline;
+  padding: 12px;
+}
+
+.section-title {
+  color: $text2;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: $text2;
+  font-size: 11px;
+}
+
+input,
+select {
+  background: $bg;
+  color: $text;
+  border: 1px solid $hairline;
+  height: 24px;
+  padding: 0 4px;
+  font-size: 12px;
+  font-family: Consolas, Menlo, monospace;
+}
+
+input[type="number"],
+.z-field {
+  width: 64px;
+  text-align: right;
+}
+
+input[type="range"] {
+  flex: 1;
+  min-width: 80px;
+  height: 24px;
+  padding: 0;
+}
+
+button {
+  background: $bg;
+  color: $text;
+  border: 1px solid $hairline;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    border-color: $accent;
+  }
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  &.primary {
+    background: $accent;
+    border-color: $accent;
+    color: #10161c;
+  }
+  &.danger {
+    border-color: $red;
+    color: $red;
+  }
+  &.wide {
+    width: 100%;
+  }
+  &.mini {
+    height: 20px;
+    font-size: 11px;
+    padding: 0 6px;
+    margin-left: 6px;
+  }
+}
+
+// Header ---------------------------------------------------------------------
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: $surface;
+  border: 1px solid $hairline;
+  padding: 8px 12px;
+}
+
+.comp-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.comp-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chip {
+  border: 1px solid $hairline;
+  padding: 1px 6px;
+  font-size: 11px;
+  white-space: nowrap;
+  color: $text2;
+
+  &.chip-clean {
+    border-color: $green;
+    color: $green;
+  }
+  &.chip-warn {
+    border-color: $amber;
+    color: $amber;
+  }
+  &.chip-blocker {
+    border-color: $red;
+    color: $red;
+  }
+}
+
+// Depth graph placeholder ------------------------------------------------------
+.depth-graph-placeholder {
+  border: 1px dashed $hairline;
+  padding: 8px;
+  margin-bottom: 8px;
+
+  &.empty {
+    color: $text2;
+    text-align: center;
+    padding: 24px 8px;
+  }
+}
+
+.placeholder-note {
+  color: $text2;
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+
+.axis-caption {
+  color: $text2;
+  font-family: Consolas, Menlo, monospace;
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+
+.plane-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 4px;
+  border: 1px solid transparent;
+
+  &.selected {
+    border-color: $accent;
+  }
+  &.fog .plane-name {
+    opacity: 0.6;
+  }
+}
+
+.plane-name {
+  width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: Consolas, Menlo, monospace;
+}
+
+.coverage {
+  font-family: Consolas, Menlo, monospace;
+  font-size: 11px;
+  min-width: 92px;
+  color: $text2;
+
+  &.coverage-clear {
+    color: $green;
+  }
+  &.coverage-exposes {
+    color: $red;
+  }
+  &.stale {
+    opacity: 0.5;
+  }
+}
+
+.depth-actions input[type="number"] {
+  width: 56px;
+}
+
+// Move -------------------------------------------------------------------------
+.move-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+// Console -----------------------------------------------------------------------
+.console-scroll {
+  max-height: 220px;
+  min-height: 54px;
+  overflow-y: auto;
+  font-family: Consolas, Menlo, monospace;
+  font-size: 12px;
+}
+
+.console-entry {
+  border-bottom: 1px solid $hairline;
+  padding: 6px 0;
+
+  &.failed .entry-fn {
+    color: $red;
+  }
+}
+
+.entry-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: $text2;
+  font-size: 11px;
+}
+
+.entry-fn {
+  color: $text;
+}
+
+.entry-body {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.line-warn {
+  color: $amber;
+  border-left: 2px solid $amber;
+  padding-left: 6px;
+}
+
+.line-error {
+  color: $red;
+  border-left: 2px solid $red;
+  padding-left: 6px;
+}
+
+.line-ok {
+  color: $green;
+}
+
+.line-dim {
+  color: $text2;
+}
+
+.console-empty {
+  padding: 4px 0;
+}
+
+// Confirm strip -------------------------------------------------------------------
+.confirm-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.confirm-msg {
+  color: $amber;
+  font-size: 11px;
+}
+
+// Mock dev strip --------------------------------------------------------------------
+.mock-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  border: 1px dashed $amber;
+  color: $amber;
+  padding: 6px 8px;
+  font-size: 11px;
+}

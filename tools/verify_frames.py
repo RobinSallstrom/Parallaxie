@@ -10,7 +10,8 @@ every file to stop growing before hashing.
 import sys, os, time, hashlib
 
 FRAMES = ["f_flat.png", "f_built.png", "f_push_t0.png",
-          "f_prebake.png", "f_postbake.png", "f_push_end.png"]
+          "f_prebake.png", "f_postbake.png", "f_push_end.png",
+          "f_scaled_flat.png", "f_scaled_built.png"]
 
 
 def wait_stable(path, timeout=120, quiet=1.0):
@@ -63,6 +64,8 @@ def main():
          h["f_prebake.png"] == h["f_postbake.png"]),
         ("MOVE NON-NULL (push_end != flat)",
          h["f_push_end.png"] != h["f_flat.png"]),
+        ("SCALED FRAME-0 LOCK  (scaled_flat == scaled_built)  [defect #1]",
+         h["f_scaled_flat.png"] == h["f_scaled_built.png"]),
     ]
     print()
     for name, ok in checks:

@@ -1,29 +1,30 @@
-PARALLAXIE v1 SMOKE TEST - Fri Aug 28 2026 13:13:50 GMT+0200
+PARALLAXIE v1 SMOKE TEST - Thu Sep 10 2026 10:29:36 GMT+0200
 RESULT: ALL PASS
 ----------------------------------------
-PASS  0.1 Parallaxie core loaded  [v1.2]
-PASS  0.2 PSD imported as comp  [2480x3509]
+PASS  0.1 Parallaxie core loaded  [v1.4]
+fixture: 1920x1080 24fps 6.00s renderer=ADBE Advanced 3d stack: 03_NEAR > 05_FX_PortalGlow > 02_GATE_ALT(off) > 02_GATE_PLATE > 01_SKY_ALT(off) > 01_SKY_PLATE
+PASS  0.2 synthetic fixture comp built  [1920x1080, 6 layers]
 frame saved: f_flat.png (t=0.00)
-build: OK: rigged 7 layers (3 depth planes), far=5000, order=stack
-WARN 3 NN_ layer(s) hidden and NOT rigged: 02_GATE_nearbandfill, 02_GATE_FG, 01_SKY_bandfill
-PASS  1.1 build returned OK  [OK: rigged 7 layers (3 depth planes), far=5000, order=stack
-WARN 3 NN_ layer(s) hidden and NOT rigged: 02_GATE_nearbandfill, 02_GATE_FG, 01_SKY_bandfill]
+build: OK: rigged 4 layers (3 depth planes), far=5000, order=stack
+WARN 2 NN_ layer(s) hidden and NOT rigged: 02_GATE_ALT, 01_SKY_ALT
+PASS  1.1 build returned OK  [OK: rigged 4 layers (3 depth planes), far=5000, order=stack
+WARN 2 NN_ layer(s) hidden and NOT rigged: 02_GATE_ALT, 01_SKY_ALT]
 PASS  1.2 camera exists
 PASS  1.3 null exists
 PASS  1.4 planes rigged 3D
 PASS  1.5 depth order sky>gate>near  [5000/2500/0]
 PASS  1.6 near is 0  [0]
 PASS  1.7 FX co-planar with gate  [2500 vs 2500]
-PASS  1.8 frame-0 screen lock identity (gate)  [world 1240.0,2545.8 expected 1240.0,2545.8]
-PASS  1.9 scale compensation  [172.58 vs 172.58]
+PASS  1.8 frame-0 screen lock identity (gate)  [world 913.5,609.7 expected 913.5,609.7]
+PASS  1.9 scale compensation  [193.75 vs 193.75]
 frame saved: f_built.png (t=0.00)
 PASS  2.1 setDepth OK  [OK]
-PASS  2.2 screen lock holds at new depth  [world 1240.0 expected 1240.0]
+PASS  2.2 screen lock holds at new depth  [world 922.5 expected 922.5]
 move: OK: Push-In 5% over 6s
 PASS  3.1 applyMove OK  [OK: Push-In 5% over 6s]
 PASS  3.2 two keys on null  [2]
-PASS  3.3 push amount ~5% on mean plane  [dz=283.1]
-PASS  3.4 parallax differential (gate grows more than sky)  [1.0500 vs 1.0347]
+PASS  3.3 push amount ~5% on mean plane  [dz=246.0]
+PASS  3.4 parallax differential (gate grows more than sky)  [1.0500 vs 1.0332]
 PASS  3.5 keys are eased (influence ~66)  [66]
 frame saved: f_push_end.png (t=5.96)
 frame saved: f_push_t0.png (t=0.00)
@@ -37,31 +38,51 @@ PASS  5.2 target soloed
 PASS  5.3 jumped to extreme  [5.96 vs 5.96]
 PASS  5.4 audit restores solo states + time
 frame saved: f_prebake.png (t=0.00)
-bake: OK: baked 8 layers (post-expression sampled, no layout shift)
-PASS  6.1 bake OK  [OK: baked 8 layers (post-expression sampled, no layout shift)]
+bake: OK: baked 5 layers (post-expression sampled, no layout shift)
+PASS  6.1 bake OK  [OK: baked 5 layers (post-expression sampled, no layout shift)]
 PASS  6.2 expressions stripped
 PASS  6.3 rig effects removed
-PASS  6.4 NO LAYOUT JUMP (ZSC v2 bug regression)  [gate scale 172.581->172.581]
+PASS  6.4 NO LAYOUT JUMP (ZSC v2 bug regression)  [gate scale 193.750->193.750]
 frame saved: f_postbake.png (t=0.00)
 PASS  7.1 undo restored rig
-reset: OK: reset 8 layers to flat
-PASS  7.2 reset OK  [OK: reset 8 layers to flat]
+reset: OK: reset 5 layers to flat
+PASS  7.2 reset OK  [OK: reset 5 layers to flat]
 PASS  7.3 layers flat again  [3D=false scale=100]
-PASS  8.0 rebuild for v1.1 section  [OK: rigged 7 layers (3 depth planes), far=5000, order=stack]
-PASS  8.1 preflight runs and reports  [comp: PXE_TEST 2480x3509  24fps  6.00s]
+PASS  8.0 rebuild for v1.1 section  [OK: rigged 4 layers (3 depth planes), far=5000, order=stack]
+PASS  8.1 preflight runs and reports  [comp: PXE_TEST 1920x1080  24fps  6.00s]
 PASS  8.2 preflight flags a hidden NN_ layer
-PASS  8.3 build WARNS on hidden planes instead of silently returning OK  [WARN 4 NN_ layer(s) hidden and NOT rigged: 03_NEAR, 02_GATE_nearbandfi]
+PASS  8.3 build WARNS on hidden planes instead of silently returning OK  [WARN 3 NN_ layer(s) hidden and NOT rigged: 03_NEAR, 02_GATE_ALT, 01_SK]
 PASS  8.4 stack order drives depth (top = nearest = 0)  [0 / 5000]
 fog(v1.1): OK: PXE_FOG_02 at z=2600, 8%, stacked below 02_GATE_PLATE
-PASS  8.5 fog card stacked behind every nearer plane  [PXE_FOG_02 at index 13 of 17]
+PASS  8.5 fog card stacked behind every nearer plane  [PXE_FOG_02 at index 8 of 10]
 PASS  8.6 fog colour parameter honoured (not hardcoded teal)  [PXE_FOG_02 = 0.90,0.50,0.40]
 PASS  8.7 distribute bias clusters planes toward camera  [1250 < 2500]
 PASS  8.8 audit restores solo after layer count changed
 PASS  8.9 preflight detects a 2D layer splitting the 3D group
-PASS  9.1 bands() reports a cut per adjacent plane pair  [bands: Drift L 5%   comp 2480x3509   zoom 3444]
-PASS  9.2 exact lateral form collapses onto the doc shorthand at z_near=0  [shorthand 52.1 vs exact 52.1]
-PASS  9.3 push-in is computed radially, not with the lateral formula  [  radial: band = r x (m_near - m_far), r_corner = 2148, dolly = 283]
+PASS  9.1 bands() reports a cut per adjacent plane pair  [bands: Drift L 5%   comp 1920x1080   zoom 2667]
+PASS  9.2 exact lateral form collapses onto the common shorthand at z_near=0  [shorthand 46.5 vs exact 46.5]
+PASS  9.3 push-in is computed radially, not with the lateral formula  [  radial: band = r x (m_near - m_far), r_corner = 1101, dolly = 246]
 PASS  9.4 checkMove clears a push-in (margins grow monotonically)  [  push-in scales every plane outward from centre: margin grows monotonically, no failure percentage]
-PASS  9.5 checkMove catches a zero-bleed plate losing coverage on a drift  [  EXPOSES  01_SKY_PLATE (z3333): 126 px of empty canvas]
-PASS  9.6 checkMove reports a first-failure percentage for lateral moves  [  first failure at 10.0% (01_SKY_PLATE)]
+PASS  9.5 checkMove catches a zero-bleed plate losing coverage on a drift  [  EXPOSES  01_SKY_PLATE (z3333): 85 px of empty canvas]
+PASS  9.6 checkMove reports a first-failure percentage for lateral moves  [  first failure at 0.0% (01_SKY_PLATE)]
 PASS  9.7 the same zero-bleed plate is SAFE under a push-in  [  push-in scales every plane outward from centre: margin grows monotonically, no failure percentage]
+PASS  10.1 call() round-trips a valid request as parseable JSON  [{"ok":true,"msg":"Parallaxie 1.4","warnings":[],"data":{"ver]
+PASS  10.2 unknown fn refused by name, valid fns listed  [ERROR: unknown fn 'noSuchThing'. Valid fns: addFog, adoptSel]
+PASS  10.3 malformed JSON never throws, returns ok:false  [ERROR: JSON parse error at 7: unexpected character]
+PASS  10.4 checkMove via call() carries structured per-plane data  [checkMove: Push-In 5% on 4 rigged layer(s)]
+PASS  10.5 status via call() reports per-layer fields  [4 layers]
+PASS  11.1 stripped comp has no convention layers (control)  [ERROR: no NN_ convention layers found]
+PASS  11.2 buildSelected rigs the selection without manual renaming  [OK: rigged 4 layers (3 depth planes), far=5000, order=stack]
+PASS  11.3 auto-prefix follows stack order (bottom = 01 = farthest)  [01_sky11 .. 04_near11]
+PASS  11.4 depths follow the stack (near 0, sky far)  [0 / 5000]
+PASS  11.5 unselected layers stay unrigged  [gateAlt11 has no Z Space effect]
+PASS  11.6 FX rider still co-planar after selection build  [2500 vs 2500]
+PASS  11.7 adoptSelected adds a layer to the existing rig  [OK: adopted 1 layer(s): 02_extraCard11 (z=2500)]
+PASS  11.8 adopted layer inherits the depth of the plane below it  [2500 vs 2500]
+PASS  11.9 adopted layer got a depth-ranked NN_ prefix  [02_extraCard11]
+frame saved: f_scaled_flat.png (t=0.00)
+PASS  12.1 build OK on a scaled layer  [OK: rigged 5 layers (4 depth planes), far=6000, order=stack]
+frame saved: f_scaled_built.png (t=0.00)
+PASS  12.2 scaled plate projects from its own base (130), not 100  [325.0 vs 325.0]
+PASS  12.3 non-uniform base scale preserved (x,y independent)  [260.0,390.0]
+PASS  12.4 reset restores base scale, not 100 (defect #1)  [80,120]
