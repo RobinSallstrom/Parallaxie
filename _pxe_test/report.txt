@@ -1,4 +1,4 @@
-PARALLAXIE v1 SMOKE TEST - Thu Sep 10 2026 16:52:40 GMT+0200
+PARALLAXIE v1 SMOKE TEST - Thu Sep 10 2026 17:00:49 GMT+0200
 RESULT: ALL PASS
 ----------------------------------------
 PASS  0.1 Parallaxie core loaded  [v1.4]
@@ -90,3 +90,8 @@ frame saved: f_deepscale_flat.png (t=0.00)
 frame saved: f_deepscale_built.png (t=0.00)
 PASS  13.1 procedural plate rigged and scaled deep  [z=4000]
 PASS  13.2 raster plate scaled deep by projection (z>0)  [z=4000]
+PASS  14.1 preflight BLOCKS a keyed transform layer  [blocker present]
+PASS  14.2 build REFUSES keyed transforms, no partial rig  [ERROR: 1 layer(s) have position/scale keyframes; Build would hid]
+PASS  14.3 build succeeds once the keys are removed  [OK: rigged 5 layers (4 depth planes), far=5000, order=stack]
+PASS  14.4 bake handles a keyed rigged layer without throwing  [OK: baked 5 layers (post-expression sampled, no layout shift)]
+PASS  14.5 reset handles keyed layers without throwing  [OK: reset 5 layers to flat]

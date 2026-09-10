@@ -535,6 +535,54 @@
         for (i = 0; i < vis13.length; i++) vis13[i].enabled = true;
         PXE.buildFromComp(5000);
 
+
+        // ============ TEST 14: KEYFRAMED TRANSFORMS REFUSED / SAFE (defect #3) ============
+        // Parallaxie's projection assumes a STATIC base transform. A layer that
+        // already animates would have its keyframes silently hidden under the
+        // rig's expressions, and setValue on a keyed property throws mid-Bake/
+        // Reset. So Build refuses keyed layers (preflight BLOCKS them), and
+        // Bake/Reset guard every setValue so they never throw.
+
+        PXE.reset();
+        var kl = findL(comp, "02_gate11");
+        var pv0 = kl.position.value, pv1 = pv0.slice(); pv1[0] = pv0[0] + 60;
+        kl.position.setValueAtTime(0, pv0);
+        kl.position.setValueAtTime(1, pv1);
+        var pf14 = PXE.preflight();
+        check("14.1 preflight BLOCKS a keyed transform layer",
+              pf14.indexOf("BLOCKER") !== -1 && pf14.indexOf("keyframe") !== -1 &&
+              pf14.indexOf("02_gate11") !== -1, "blocker present");
+        var b14 = PXE.buildFromComp(5000);
+        check("14.2 build REFUSES keyed transforms, no partial rig",
+              b14.indexOf("ERROR") === 0 && b14.indexOf("keyframe") !== -1 && isNaN(zOf(kl)),
+              b14.substr(0, 64));
+        while (kl.position.numKeys > 0) kl.position.removeKey(1);
+        var b14b = PXE.buildFromComp(5000);
+        check("14.3 build succeeds once the keys are removed",
+              b14b.indexOf("OK") === 0 && !isNaN(zOf(kl)), b14b.split("\n")[0]);
+        // keys added to an already-rigged layer must not throw Bake
+        var kv = kl.position.value, kv1 = kv.slice(); kv1[0] = kv[0] + 10;
+        kl.position.setValueAtTime(0, kv);
+        kl.position.setValueAtTime(1, kv1);
+        var bake14 = PXE.bake();
+        check("14.4 bake handles a keyed rigged layer without throwing",
+              bake14.indexOf("OK") === 0, bake14.split("\n")[0]);
+        // rebuild and prove Reset is equally safe
+        var klc = findL(comp, "02_gate11");
+        while (klc.position.numKeys > 0) klc.position.removeKey(1);
+        PXE.buildFromComp(5000);
+        var klr = findL(comp, "02_gate11");
+        var rv = klr.position.value, rv1 = rv.slice(); rv1[0] = rv[0] + 10;
+        klr.position.setValueAtTime(0, rv);
+        klr.position.setValueAtTime(1, rv1);
+        var reset14 = PXE.reset();
+        check("14.5 reset handles keyed layers without throwing",
+              reset14.indexOf("OK") === 0, reset14.split("\n")[0]);
+        // cleanup: strip keys, rebuild a clean baseline
+        var klf = findL(comp, "02_gate11");
+        while (klf.position.numKeys > 0) klf.position.removeKey(1);
+        PXE.buildFromComp(5000);
+
     } catch (err) {
         log("SUITE ERROR: " + err.toString() + (err.line ? " (line " + err.line + ")" : ""));
         FAILS++;

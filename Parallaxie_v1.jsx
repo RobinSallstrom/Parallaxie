@@ -89,6 +89,19 @@
         return out;
     }
 
+    // Enabled convention layers whose position or scale is keyframed. Build must
+    // refuse these: the projection assumes a static base transform, and setValue
+    // on a keyed property throws in Bake/Reset (debt #3).
+    function keyedTransformNames(comp) {
+        var out = [], s = sceneLayers(comp);
+        for (var i = 0; i < s.length; i++) {
+            var l = s[i].layer, nk = 0;
+            try { nk = l.position.numKeys + l.scale.numKeys; } catch (e) {}
+            if (nk > 0) out.push(l.name);
+        }
+        return out;
+    }
+
     // How the NN_ numbering runs relative to AE stacking order.
     // "back-to-front" = 01 at the bottom = farthest  (the 01_SKY convention)
     // "front-to-back" = 01 at the top    = nearest   (inverse; common in export stacks)
@@ -254,6 +267,11 @@
             ensureRig(comp);
             var planes = planesOnly(comp);
             if (planes.length === 0) return "ERROR: no NN_ convention layers found";
+            var keyedRig = keyedTransformNames(comp);
+            if (keyedRig.length)
+                return "ERROR: " + keyedRig.length + " layer(s) have position/scale keyframes; " +
+                       "Build would hide them under its expressions. Remove the keys or " +
+                       "pre-compose first: " + keyedRig.join(", ");
 
             var warn = [], i, d;
             var hidden = hiddenPlaneNames(comp);
@@ -369,6 +387,14 @@
             return "ERROR: no layers selected - select the plane layers in the timeline, then build from selection";
         if (cand.length > 99)
             return "ERROR: " + cand.length + " layers selected; the NN_ prefix caps at 99 planes";
+        var keyedSel = [];
+        for (i = 0; i < cand.length; i++) {
+            var nkS = 0; try { nkS = cand[i].position.numKeys + cand[i].scale.numKeys; } catch (eKS) {}
+            if (nkS > 0) keyedSel.push(cand[i].name);
+        }
+        if (keyedSel.length)
+            return "ERROR: " + keyedSel.length + " selected layer(s) have position/scale keyframes; " +
+                   "remove the keys or pre-compose first: " + keyedSel.join(", ");
         cand.sort(function (a, b) { return b.index - a.index; }); // bottom first = 01 = farthest
         // NN_ planes outside the selection will rig too - count them for the report
         var inSel = {}, outside = 0, pre = planesOnly(comp);
@@ -600,7 +626,7 @@
     // Bake: sample POST-EXPRESSION values, then strip.  [ZSC bug #1 fix]
     PXE.bake = function () {
         var comp = activeComp(); if (!comp) return "ERROR: no comp";
-        var rig = riggedLayers(comp), n = 0;
+        var rig = riggedLayers(comp), n = 0, keyedSkip = [];
         app.beginUndoGroup("PXE Bake");
         try {
             for (var i = 0; i < rig.length; i++) {
@@ -609,12 +635,18 @@
                 var pVal = l.position.value;   // post-expression
                 l.scale.expression = "";
                 l.position.expression = "";
-                l.scale.setValue(sVal);
-                l.position.setValue(pVal);
+                // setValue THROWS on a keyed property. Build refuses keyed layers,
+                // but guard anyway: leave the now-expression-free keyframes in place
+                // rather than crash mid-loop (debt #3).
+                if (l.scale.numKeys === 0) l.scale.setValue(sVal);
+                if (l.position.numKeys === 0) l.position.setValue(pVal);
+                if (l.scale.numKeys || l.position.numKeys) keyedSkip.push(l.name);
                 try { if (l.effect(EFX_BP)("Point").expression) l.effect(EFX_BP)("Point").expression = ""; } catch (e) {}
                 unrigLayer(l); n++;
             }
-            return "OK: baked " + n + " layers (post-expression sampled, no layout shift)";
+            return "OK: baked " + n + " layers (post-expression sampled, no layout shift)" +
+                   (keyedSkip.length ? "\nWARN kept keyframes on: " + keyedSkip.join(", ") +
+                    " (baked value not written over existing keys)" : "");
         } catch (err) { return "ERROR: " + err.toString(); }
         finally { app.endUndoGroup(); }
     };
@@ -634,7 +666,7 @@
                 // never wrote to the scale property, so clearing it already
                 // restores the original scale (100% or otherwise). Forcing 100
                 // here discarded a scaled layer's real size - that was defect #1.
-                if (bp) l.position.setValue([bp[0], bp[1], 0]);
+                if (bp && l.position.numKeys === 0) l.position.setValue([bp[0], bp[1], 0]);
                 l.threeDLayer = false; n++;
             }
             return "OK: reset " + n + " layers to flat";
@@ -840,16 +872,11 @@
         if (split.length)
             out.push("WARN     2D layer(s) inside the 3D stack break depth sorting: " + split.join(", "));
 
-        var keyed = [];
-        for (i = 0; i < planes.length; i++) {
-            var kl = planes[i].layer, nk = 0;
-            try { nk = kl.position.numKeys + kl.scale.numKeys; } catch (eNK) {}
-            if (nk > 0) keyed.push(kl.name);
-        }
+        var keyed = keyedTransformNames(comp);
         if (keyed.length)
-            out.push("WARN     position/scale keyframes on: " + keyed.join(", ") +
-                     " - Build reads the value at the current frame; Bake/Reset do" +
-                     " not yet handle keyed transforms cleanly (debt #3, still open).");
+            out.push("BLOCKER  position/scale keyframes on: " + keyed.join(", ") +
+                     " - Build would hide them under its expressions. Remove the keys" +
+                     " or pre-compose these layers first.");
 
         var badFog = misstackedFog(comp);
         if (badFog.length)

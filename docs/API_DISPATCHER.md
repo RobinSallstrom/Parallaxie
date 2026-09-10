@@ -141,5 +141,5 @@ A CEP/browser host has native `JSON` and should just use it on the strings
 (`version`), unknown `fn`, malformed JSON never throwing, `checkMove` typed
 data, and `status` typed data. That took the suite from 49 to **54** checks;
 TEST 11 (selection build + adopt, v1.3) and TEST 12 (non-100% base scale /
-defect #1, v1.4) and TEST 13 (zero rig error at deep scale) take it to **69**, all executed headless and passing on
+defect #1, v1.4) TEST 13 (zero rig error at deep scale) and TEST 14 (keyed transforms refused, defect #3) take it to **74**, all executed headless and passing on
 2026-09-10, including a SCALED FRAME-0 md5 lock (`f_scaled_flat == f_scaled_built`).

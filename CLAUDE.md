@@ -52,7 +52,7 @@ keyed layers are still open — see the debts below.
 - Prefer matchNames over display names in any new ExtendScript. Do not add another
   `("Slider")` or `("Point")` lookup; the existing ones are debt #6 below.
 - After ANY engine change, re-run the suite and diff against `_pxe_test/report.txt`.
-  69 PASS / 0 FAIL is the bar (49 pre-dispatcher, 54 pre-v1.3, 63 pre-v1.4, 67 pre-defect-1-test). Frame locks are checked by `tools/verify_frames.py`.
+  74 PASS / 0 FAIL is the bar (49 pre-dispatcher, 54 pre-v1.3, 63 pre-v1.4, 67 pre-defect-1-test, 69 pre-defect-3). Frame locks are checked by `tools/verify_frames.py`.
 - Describe planned things as planned. Do not document features the code does not have.
 
 ## The test suite and its baseline
@@ -96,9 +96,11 @@ open.
    now WARNs).
 2. **Parented layers mix coordinate spaces.** Base Position is read in parent space, Scale
    Center in comp space. Fix: preflight BLOCKER plus an unparent-keeping-transform path.
-3. **Pre-existing keyframes are overridden, then break Bake/Reset.** Build captures the
-   value at the current CTI and expressions cover the keys; `setValue` on a keyed property
-   throws mid-loop. Fix: preflight BLOCKER on `numKeys`; Bake/Reset must handle or refuse.
+3. **FIXED in v1.4 — Pre-existing keyframes.** Build now REFUSES layers with position or
+   scale keyframes (preflight BLOCKER; `buildFromComp` and `buildFromSelection` return ERROR
+   naming them) instead of hiding them under expressions. Bake and Reset guard every
+   `setValue` with a `numKeys` check so they never throw on a keyed property. Proven by suite
+   TEST 14.
 4. **Locked layers abort Build half-way.** `preflight` never reads `l.locked`.
 5. **Renderer is never checked.** The md5 lock is a claim about Classic 3D only; Advanced
    3D is the default for new comps since AE 24. Warn in preflight and run the suite under
