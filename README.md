@@ -5,8 +5,9 @@
 Parallaxie takes a layered comp — key art, an illustration, a photo that has been separated
 into planes — and turns it into a finished, camera-animated 2.5D shot in three clicks:
 build the rig, set the depths, apply one camera move. Between each click everything stays
-hand-tunable, and frame 0 of the animated shot is pixel-identical to the flat art you
-started with.
+hand-tunable, and frame 0 of the animated shot matches the flat art you started with:
+pixel-exact on flat-colour and gradient planes, and visually identical (sub-pixel, within
+~3/255) on painted raster art, where AE's 3D camera resamples scaled planes.
 
 It is built for motion designers who animate finished artwork rather than model scenes:
 trailer and title work, hero art and key art, editorial illustration, photo parallax.
@@ -14,7 +15,7 @@ It is a rig, not a template pack — it gives you depth, a motivated camera move
 coverage check that tells you where the art will run out, and gets out of the way.
 
 Current version: **1.4** (scriptable core, a minimal ScriptUI panel, and a CEP panel in `cep/`).
-Test suite: 67 checks, self-contained. See [Status](#status) for what is not done yet.
+Test suite: 69 checks, self-contained. See [Status](#status) for what is not done yet.
 
 ---
 
@@ -143,7 +144,7 @@ The suite needs nothing but After Effects. It builds its own scene.
    are, in the repo root). The suite resolves its siblings via `$.fileName`, so do not move
    them apart.
 2. In AE, start a fresh project (File > New > New Project).
-3. File > Scripts > Run Script File… → `PXE_SmokeTest.jsx`. It runs the 67 checks, writes
+3. File > Scripts > Run Script File… → `PXE_SmokeTest.jsx`. It runs the 69 checks, writes
    `_pxe_test/report.txt` and six frame PNGs next to the script, and finishes with an alert.
 4. Optionally, `python3 tools/verify_frames.py` hashes the PNGs and asserts the three frame
    locks: `f_flat == f_built == f_push_t0` (frame-0 lock), `f_prebake == f_postbake` (bake

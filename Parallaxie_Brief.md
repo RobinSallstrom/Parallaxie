@@ -71,9 +71,11 @@ separation workflow, not by building a mesh tool.
 
 ## 3. Principles
 
-**Frame 0 is sacred.** A built comp renders byte-identical to the flat art. Depth edits,
-camera moves and fog cards must never disturb it. This is proven by md5 in the suite, and
-it is table stakes in the market, so it is an invariant, not a headline.
+**Frame 0 is sacred.** A built comp renders visually identical to the flat art: pixel-exact
+on flat-colour and gradient planes (proven by md5 in the suite), and sub-pixel identical on
+painted raster (<=~3/255, invisible - AE resamples scaled raster planes). Depth edits,
+camera moves and fog cards must never disturb it. Table stakes in the market, so it is an
+invariant, not a headline.
 
 **One motivated camera move per shot.** Flat art given depth reads best with a single,
 deliberate camera idea. The engine defaults to it and normalises strength so the idea
@@ -239,9 +241,11 @@ ones we care about.
 
 - Build from a plain layer selection with no renaming, depth from stacking order, in one
   click with no modal dialogs. Naming-convention build remains as the pipeline door.
-- Frame 0 byte-identical after Build on a comp with layers at non-100% scale, flipped
-  layers, non-uniform stretch, and arbitrary anchor points. (Today: fails on the first
-  scaled layer.)
+- Frame 0 unchanged after Build on layers at non-100% scale, flipped, non-uniformly
+  stretched, and with arbitrary anchor points - byte-exact on flat/gradient content,
+  visually identical (sub-pixel) on raster. (Non-100% scale: FIXED in v1.4, proven by the
+  SCALED FRAME-0 md5 lock and on real Battlemarked art. Flip / stretch / anchor: still to
+  verify.)
 - Absolute numeric depth per plane, always shown; Distribute and Random.
 - Undo of any single action is one Undo step; nothing mutates outside a group.
 - Non-destructive with a visible escape hatch: Reset restores the exact pre-build

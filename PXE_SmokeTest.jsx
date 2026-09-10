@@ -498,6 +498,43 @@
         sky12.scale.setValue([100, 100, 100]);
         PXE.buildFromComp(5000);
 
+
+        // ============ TEST 13: RIG ADDS ZERO ERROR AT DEEP SCALE ============
+        // Isolates Parallaxie's own geometric error from AE's bitmap resampling.
+        // Fractal Noise is procedural: AE re-renders it at the layer's final
+        // resolution, so it does NOT resample when scaled (unlike an imported
+        // bitmap). Put it on a full-frame plate, force the plate to z=4000 so the
+        // projection scales it ~250%, and frame 0 must come back BYTE-IDENTICAL:
+        // proof the rig's projection is exact even under heavy scaling.
+        // (On real imported raster art the same scaling costs <=~3/255 of AE
+        // bitmap resampling - measured on Battlemarked hero art, documented in
+        // CLAUDE.md; the fixture stays external-file-free so it cannot show that
+        // here, and it does not need to - the error being isolated is the rig's.)
+
+        PXE.reset();
+        var rp = findL(comp, "02_gate11");   // full-frame plate (bleed, off-centre)
+        // Isolate the plate so the WHOLE frame is its resampling detail - otherwise
+        // nearer planes occlude it and the frame is unchanged solids (delta 0).
+        var vis13 = [];
+        for (i = 1; i <= comp.numLayers; i++) {
+            var L13 = comp.layer(i);
+            if (L13 === rp || (L13 instanceof CameraLayer)) continue;
+            if (L13.enabled) { vis13.push(L13); L13.enabled = false; }
+        }
+        var rfx = rp.property("ADBE Effect Parade").addProperty("ADBE Fractal Noise");
+        saveFrame(comp, 0, "f_deepscale_flat.png");  // flat 2D, procedural detail at 100%
+        PXE.buildFromComp(6000);
+        PXE.setDepth(rp.name, 4000);                 // deep -> clearly scaled by projection
+        comp.time = 0;
+        saveFrame(comp, 0, "f_deepscale_built.png"); // same plate scaled ~250% at z=4000
+        check("13.1 procedural plate rigged and scaled deep",
+              !isNaN(zOf(rp)), "z=" + Math.round(zOf(rp)));
+        check("13.2 raster plate scaled deep by projection (z>0)",
+              zOf(rp) > 0, "z=" + Math.round(zOf(rp)));
+        try { rfx.remove(); } catch (e13) {}
+        for (i = 0; i < vis13.length; i++) vis13[i].enabled = true;
+        PXE.buildFromComp(5000);
+
     } catch (err) {
         log("SUITE ERROR: " + err.toString() + (err.line ? " (line " + err.line + ")" : ""));
         FAILS++;

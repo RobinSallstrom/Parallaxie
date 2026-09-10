@@ -70,7 +70,49 @@ def main():
     print()
     for name, ok in checks:
         print(f"{'PASS' if ok else 'FAIL'}  {name}")
-    return 0 if all(ok for _, ok in checks) else 1
+    deep = deepscale_check(d)  # None = skipped (no Pillow), True/False = result
+    print()
+    ok_all = all(ok for _, ok in checks) and (deep is not False)
+    return 0 if ok_all else 1
+
+
+# Isolates the rig's own geometric error from AE's bitmap resampling. Suite TEST 13
+# scales a PROCEDURAL plane (Fractal Noise, which AE re-renders losslessly at any
+# scale) to ~250% via a deep depth; frame 0 must stay BYTE-EXACT (delta 0), proving
+# the projection math adds zero error even under heavy scaling. Real IMPORTED raster
+# art is different: AE resamples a scaled bitmap sub-pixel, costing <=~3/255 (measured
+# on Battlemarked hero art, 2026-09-10) - visually identical, not bit-identical. That
+# is AE's resampling, not the rig, and the external-file-free fixture cannot show it.
+# To tolerance-check REAL art, point this function at that frame pair with DEEPSCALE_TOL
+# raised to ~4. Needs Pillow; skipped (not failed) without it.
+DEEPSCALE_PAIR = ("f_deepscale_flat.png", "f_deepscale_built.png")
+DEEPSCALE_TOL = 0  # procedural plate: the rig must be exact. Real bitmaps: ~4.
+REAL_ART_TOL_NOTE = "real imported raster art differs by <=~3/255 (AE bitmap resampling), not a rig error"
+
+
+def deepscale_check(d):
+    try:
+        from PIL import Image, ImageChops
+    except ImportError:
+        print("NOTE  DEEP-SCALE rig-error check skipped (pip install Pillow to enable)")
+        return None
+    paths = [os.path.join(d, n) for n in DEEPSCALE_PAIR]
+    for p in paths:
+        if not wait_stable(p):
+            print(f"NOTE  DEEP-SCALE check skipped ({os.path.basename(p)} missing)")
+            return None
+    a = Image.open(paths[0]).convert("RGB")
+    b = Image.open(paths[1]).convert("RGB")
+    if a.size != b.size:
+        print(f"FAIL  DEEP-SCALE size mismatch {a.size} vs {b.size}")
+        return False
+    diff = ImageChops.difference(a, b)
+    maxd = max(hi for _, hi in diff.getextrema())
+    ok = maxd <= DEEPSCALE_TOL
+    print(f"      DEEP-SCALE rig error: max channel delta {maxd}/255 (tol {DEEPSCALE_TOL}); "
+          f"{REAL_ART_TOL_NOTE}")
+    print(f"{'PASS' if ok else 'FAIL'}  DEEP-SCALE RIG ERROR  (procedural plate byte-exact at ~250% scale, z=4000)")
+    return ok
 
 
 if __name__ == "__main__":

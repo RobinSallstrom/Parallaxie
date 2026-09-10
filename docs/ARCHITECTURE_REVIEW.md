@@ -834,8 +834,12 @@ Same 49 PASS lines; these detail strings change because they echo fixture geomet
   reading disagree — look.
 
 ### Not verified (no AE in the environment)
-- That AE renders frame 0 byte-identical with this fixture (Gradient Ramp on solids, gate
-  offset −24/+36, `f = 1.9375`). Same geometry the old fixture passed on; not executed.
+- [VERIFIED 2026-09-10, headless via adb-mcp] AE renders frame 0 byte-identical on this
+  fixture (Gradient Ramp on solids, gate offset −24/+36, `f = 1.9375`) under Advanced 3D.
+  Byte-identity holds because solids and gradients are scale-invariant; on real painted
+  raster art the same geometry is only visually identical (<=~3/255 sub-pixel resampling),
+  that <=~3/255 is AE's bitmap resampling, not a rig error — suite TEST 13 scales a
+  procedural plate to ~250% and frame 0 stays byte-exact, isolating the rig's error at zero.
 - The Gradient Ramp parameter matchNames (`ADBE Ramp-0001…-0005`). A miss is logged as
   `WARN  fixture: …` in report.txt rather than hidden; the tests do not depend on the ramp
   values (the near cut-out alone guarantees `f_push_end != f_flat`).

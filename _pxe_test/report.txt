@@ -1,4 +1,4 @@
-PARALLAXIE v1 SMOKE TEST - Thu Sep 10 2026 10:29:36 GMT+0200
+PARALLAXIE v1 SMOKE TEST - Thu Sep 10 2026 16:52:40 GMT+0200
 RESULT: ALL PASS
 ----------------------------------------
 PASS  0.1 Parallaxie core loaded  [v1.4]
@@ -86,3 +86,7 @@ frame saved: f_scaled_built.png (t=0.00)
 PASS  12.2 scaled plate projects from its own base (130), not 100  [325.0 vs 325.0]
 PASS  12.3 non-uniform base scale preserved (x,y independent)  [260.0,390.0]
 PASS  12.4 reset restores base scale, not 100 (defect #1)  [80,120]
+frame saved: f_deepscale_flat.png (t=0.00)
+frame saved: f_deepscale_built.png (t=0.00)
+PASS  13.1 procedural plate rigged and scaled deep  [z=4000]
+PASS  13.2 raster plate scaled deep by projection (z>0)  [z=4000]

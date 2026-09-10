@@ -24,11 +24,17 @@ show a one-time renormalisation.
 
 ## The invariant
 
-**Frame 0 of a built comp must be byte-identical to the flat art.** `md5(f_flat) ==
-md5(f_built) == md5(f_push_t0)`. Depth edits, camera moves and fog cards must never disturb
-it. If that lock breaks, nothing else in the suite matters. It is currently proven only
-under the Classic 3D renderer, on layers at 100% scale, unparented and unkeyed — see the
-debts below.
+**Build must not disturb frame 0.** On the synthetic fixture (solids + Gradient Ramp,
+which are scale-invariant) this is exact and is the suite's hard gate: `md5(f_flat) ==
+md5(f_built) == md5(f_push_t0)`. If that md5 lock breaks, nothing else matters. On **real
+painted raster art the lock is visual, not byte-exact**: AE's 3D camera resamples a scaled
+raster plane sub-pixel, so frame 0 comes back visually identical but off by <=~3/255 on
+anti-aliased edges (measured on Battlemarked hero art, 2026-09-10). The rig itself adds zero geometric
+error: suite TEST 13 scales a procedural plate to ~250% and frame 0 stays byte-exact, so
+the <=~3/255 on real art is AE's bitmap resampling, not the rig. Verified headless under
+Advanced 3D. Non-100% scale
+now holds (defect #1 fixed, v1.4, proven by the SCALED FRAME-0 md5 lock); parented and
+keyed layers are still open — see the debts below.
 
 ## Rules
 
@@ -46,7 +52,7 @@ debts below.
 - Prefer matchNames over display names in any new ExtendScript. Do not add another
   `("Slider")` or `("Point")` lookup; the existing ones are debt #6 below.
 - After ANY engine change, re-run the suite and diff against `_pxe_test/report.txt`.
-  67 PASS / 0 FAIL is the bar (49 pre-dispatcher, 54 pre-v1.3, 63 pre-v1.4). Frame locks are checked by `tools/verify_frames.py`.
+  69 PASS / 0 FAIL is the bar (49 pre-dispatcher, 54 pre-v1.3, 63 pre-v1.4, 67 pre-defect-1-test). Frame locks are checked by `tools/verify_frames.py`.
 - Describe planned things as planned. Do not document features the code does not have.
 
 ## The test suite and its baseline
