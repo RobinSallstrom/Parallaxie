@@ -1,7 +1,9 @@
 // ============================================================================
 // PXE_SmokeTest.jsx - Parallaxie v1 autonomous acceptance suite
-// Run in AE via File > Scripts > Run Script File (or a CLI runner).
-// Requires Parallaxie_v1.jsx and BM_Ythryn_Split_V02.psd in the same folder.
+// Run in AE via File > Scripts > Run Script File (or a headless runner).
+// Requires Parallaxie_v1.jsx and PXE_Fixture.jsx in the same folder. No other
+// files: the test comp is a synthetic multi-plane scene built from solids by
+// PXE_Fixture.jsx (1920x1080, 24 fps, 6 s - see that file for the stack).
 //
 // Writes into a _pxe_test/ subfolder next to this script:
 //   report.txt                        - PASS/FAIL per acceptance test
@@ -43,29 +45,30 @@
     }
 
     try {
+        var i;
         // ---- load Parallaxie headless
         $.global.PXE_HEADLESS = true;
         var pxeFile = new File(here.fsName + "/Parallaxie_v1.jsx");
         if (!pxeFile.exists) throw new Error("Parallaxie_v1.jsx not found next to the test script.");
         $.evalFile(pxeFile);
         var PXE = $.global.PXE;
-        check("0.1 Parallaxie core loaded", PXE && PXE.version === "1.2", "v" + (PXE ? PXE.version : "?"));
+        check("0.1 Parallaxie core loaded", PXE && PXE.version === "1.4", "v" + (PXE ? PXE.version : "?"));
 
-        // ---- import test PSD as comp (retain layer sizes)
-        var psd = new File(here.fsName + "/BM_Ythryn_Split_V02.psd");
-        if (!psd.exists) throw new Error("BM_Ythryn_Split_V02.psd not found next to the test script.");
-        var io = new ImportOptions(psd);
-        io.importAs = ImportAsType.COMP_CROPPED_LAYERS;
-        var imported = app.project.importFile(io);
-        var comp = null;
-        if (imported instanceof CompItem) comp = imported;
-        else for (var i = 1; i <= app.project.numItems; i++) {
-            var it = app.project.item(i);
-            if (it instanceof CompItem && it.name.indexOf("BM_Ythryn_Split_V02") === 0) comp = it;
-        }
-        check("0.2 PSD imported as comp", comp !== null, comp ? comp.width + "x" + comp.height : "not found");
-        if (!comp) throw new Error("no comp");
-        comp.frameRate = 24; comp.duration = 6; comp.name = "PXE_TEST";
+        // ---- build the synthetic fixture comp (solids only, no external files)
+        $.global.PXE_FIXTURE_HEADLESS = true;
+        var fixFile = new File(here.fsName + "/PXE_Fixture.jsx");
+        if (!fixFile.exists) throw new Error("PXE_Fixture.jsx not found next to the test script.");
+        $.evalFile(fixFile);
+        var FIX = $.global.PXE_FIXTURE;
+        var comp = FIX.make({ name: "PXE_TEST", width: 1920, height: 1080, fps: 24, duration: 6 });
+        for (i = 0; i < FIX.warnings.length; i++) log("WARN  fixture: " + FIX.warnings[i]);
+        log("fixture: " + FIX.describe(comp));
+        var fixtureOK = comp !== null &&
+            findL(comp, "01_SKY_PLATE") !== null && findL(comp, "02_GATE_PLATE") !== null &&
+            findL(comp, "03_NEAR") !== null && findL(comp, "05_FX_PortalGlow") !== null;
+        check("0.2 synthetic fixture comp built", fixtureOK,
+              comp ? comp.width + "x" + comp.height + ", " + comp.numLayers + " layers" : "not built");
+        if (!fixtureOK) throw new Error("fixture incomplete");
         comp.openInViewer();
         app.project.activeItem;                       // touch
         saveFrame(comp, 0, "f_flat.png");             // reference: untouched flat comp
@@ -208,8 +211,8 @@
 
         // ============ TEST 8: v1.1 DEFENCES ============
         // Every assertion here covers a defect that shipped 32/32 GREEN under the
-        // v1.0 suite, because v1.0 only ever tested one synthetic comp that
-        // happened to dodge all of them. Found on real Battlemarked plates.
+        // v1.0 suite, because v1.0 only ever tested one comp that happened to
+        // dodge all of them. Found on real production plates.
 
         r = PXE.buildFromComp(5000);
         check("8.0 rebuild for v1.1 section", r.indexOf("OK") === 0, r.split("\n")[0]);
@@ -294,7 +297,7 @@
         spacer.remove();
 
         // ============ TEST 9: BAND GEOMETRY (v1.2) ============
-        // The doc shorthand band ~= d*(zf-zn)/(zoom+zf) is the LATERAL case with
+        // The common shorthand band ~= d*(zf-zn)/(zoom+zf) is the LATERAL case with
         // z_near ~ 0. These assert the engine uses the exact form, and that a
         // push-in is computed radially rather than with the lateral formula.
 
@@ -317,7 +320,7 @@
         var dLat = 0.05 * comp.width;
         var shorthand = dLat * (rigZ[1] - rigZ[0]) / (zmT + rigZ[1]);          // z_near = 0
         var exact = dLat * zmT * (rigZ[1] - rigZ[0]) / ((zmT + rigZ[0]) * (zmT + rigZ[1]));
-        check("9.2 exact lateral form collapses onto the doc shorthand at z_near=0",
+        check("9.2 exact lateral form collapses onto the common shorthand at z_near=0",
               near(shorthand, exact, 0.5) && rigZ[0] === 0,
               "shorthand " + shorthand.toFixed(1) + " vs exact " + exact.toFixed(1));
 
@@ -331,8 +334,10 @@
               cm.indexOf("EXPOSES") === -1 && cm.indexOf("monotonically") !== -1,
               cm.split("\n")[cm.split("\n").length - 1]);
 
-        // A full-frame plate with ZERO bleed - the real-world case (HeroArt_BG is
-        // exactly comp-size). Any lateral move must pull empty canvas in.
+        // A full-frame plate with ZERO bleed - the real-world case (a background
+        // plate exported at exactly comp size). Any lateral move must pull empty
+        // canvas in. The fixture's 01_SKY_PLATE is also zero-bleed; the assertion
+        // only requires the plate added here to be named.
         var plate = comp.layers.addSolid([0.2, 0.2, 0.2], "00_TEST_PLATE",
                                          comp.width, comp.height, 1, comp.duration);
         plate.moveToEnd();
@@ -351,6 +356,231 @@
               cm3.split("\n")[cm3.split("\n").length - 1]);
         plate.remove();
         PXE.reset();
+        PXE.buildFromComp(5000);
+
+        // ============ TEST 10: PXE.call DISPATCHER (structured results) ============
+        // The JSON seam every future UI talks through (roadmap Phase 1; review
+        // section 6.2). It must never throw: bad input comes back as {ok:false}
+        // JSON, never as an exception. PXE.json is the ES3 encoder/parser the
+        // dispatcher itself uses - the suite round-trips through it because
+        // ExtendScript has no native JSON either.
+
+        var rCall = PXE.call('{"fn":"version","args":{}}');
+        var oCall = null;
+        try { oCall = PXE.json.parse(rCall); } catch (e10a) {}
+        check("10.1 call() round-trips a valid request as parseable JSON",
+              oCall !== null && oCall.ok === true && oCall.data !== null &&
+              oCall.data.version === PXE.version,
+              String(rCall).substr(0, 60));
+
+        var callThrew = false, oUnknown = null;
+        try { oUnknown = PXE.json.parse(PXE.call('{"fn":"noSuchThing","args":{}}')); }
+        catch (e10b) { callThrew = true; }
+        check("10.2 unknown fn refused by name, valid fns listed",
+              !callThrew && oUnknown !== null && oUnknown.ok === false &&
+              oUnknown.msg.indexOf("noSuchThing") !== -1 &&
+              oUnknown.msg.indexOf("checkMove") !== -1,
+              oUnknown ? oUnknown.msg.substr(0, 60) : "call() threw");
+
+        callThrew = false; var oBad = null;
+        try { oBad = PXE.json.parse(PXE.call('{"fn": broken')); }
+        catch (e10c) { callThrew = true; }
+        check("10.3 malformed JSON never throws, returns ok:false",
+              !callThrew && oBad !== null && oBad.ok === false &&
+              oBad.msg.indexOf("ERROR") === 0,
+              oBad ? oBad.msg.substr(0, 60) : "call() threw");
+
+        var oCm = PXE.json.parse(PXE.call('{"fn":"checkMove","args":{"move":"Push-In","pct":5}}'));
+        check("10.4 checkMove via call() carries structured per-plane data",
+              oCm.ok === true && oCm.data !== null && oCm.data.move === "Push-In" &&
+              oCm.data.clear === true && oCm.data.exposes instanceof Array &&
+              oCm.data.exposes.length === 0 && oCm.data.riggedCount > 0,
+              oCm.msg);
+
+        var oSt = PXE.json.parse(PXE.call('{"fn":"status","args":{}}'));
+        check("10.5 status via call() reports per-layer fields",
+              oSt.ok === true && oSt.data !== null && oSt.data.layers instanceof Array &&
+              oSt.data.layers.length > 0 && typeof oSt.data.layers[0].z === "number" &&
+              typeof oSt.data.moveKeys === "number",
+              oSt.data ? oSt.data.layers.length + " layers" : "no data");
+
+
+        // ============ TEST 11: SELECTION BUILD + ADOPT (v1.3) ============
+        // The "default door": rig exactly what the artist selected, renaming
+        // to the NN_ convention automatically; then adopt a new layer into
+        // the existing rig at the depth of the plane below it.
+
+        PXE.reset();
+        // strip every NN_ prefix so the comp genuinely has no convention layers
+        findL(comp, "03_NEAR").name = "near11";
+        findL(comp, "05_FX_PortalGlow").name = "glow_FX_11";
+        findL(comp, "02_GATE_ALT").name = "gateAlt11";
+        findL(comp, "02_GATE_PLATE").name = "gate11";
+        findL(comp, "01_SKY_ALT").name = "skyAlt11";
+        findL(comp, "01_SKY_PLATE").name = "sky11";
+        var rNo = PXE.buildFromComp(5000);
+        check("11.1 stripped comp has no convention layers (control)",
+              rNo.indexOf("ERROR") === 0, rNo.split("\n")[0]);
+
+        for (i = 1; i <= comp.numLayers; i++) comp.layer(i).selected = false;
+        findL(comp, "near11").selected = true;
+        findL(comp, "glow_FX_11").selected = true;
+        findL(comp, "gate11").selected = true;
+        findL(comp, "sky11").selected = true;
+
+        var oSel = PXE.json.parse(PXE.call('{"fn":"buildSelected","args":{"far":5000}}'));
+        check("11.2 buildSelected rigs the selection without manual renaming",
+              oSel.ok === true && oSel.msg.indexOf("OK") === 0, oSel.msg);
+        var sky11 = findL(comp, "01_sky11"), gate11 = findL(comp, "02_gate11"),
+            glow11 = findL(comp, "03_glow_FX_11"), near11 = findL(comp, "04_near11");
+        check("11.3 auto-prefix follows stack order (bottom = 01 = farthest)",
+              sky11 !== null && gate11 !== null && glow11 !== null && near11 !== null,
+              sky11 && gate11 && glow11 && near11 ? "01_sky11 .. 04_near11" : "rename mismatch");
+        check("11.4 depths follow the stack (near 0, sky far)",
+              near11 !== null && sky11 !== null && near(zOf(near11), 0) && near(zOf(sky11), 5000),
+              near11 && sky11 ? zOf(near11) + " / " + zOf(sky11) : "layers missing");
+        check("11.5 unselected layers stay unrigged",
+              isNaN(zOf(findL(comp, "gateAlt11"))), "gateAlt11 has no Z Space effect");
+        check("11.6 FX rider still co-planar after selection build",
+              glow11 !== null && gate11 !== null && near(zOf(glow11), zOf(gate11)),
+              glow11 && gate11 ? zOf(glow11) + " vs " + zOf(gate11) : "layers missing");
+
+        // adopt: a new solid dropped just above the gate joins at the gate depth
+        var adoptL = comp.layers.addSolid([0.5, 0.5, 0.5], "extraCard11",
+                                          400, 300, 1, comp.duration);
+        adoptL.moveBefore(gate11);
+        for (i = 1; i <= comp.numLayers; i++) comp.layer(i).selected = false;
+        adoptL.selected = true;
+        var oAd = PXE.json.parse(PXE.call('{"fn":"adoptSelected","args":{}}'));
+        check("11.7 adoptSelected adds a layer to the existing rig",
+              oAd.ok === true && oAd.msg.indexOf("OK: adopted 1") === 0, oAd.msg);
+        check("11.8 adopted layer inherits the depth of the plane below it",
+              near(zOf(adoptL), zOf(gate11)), zOf(adoptL) + " vs " + zOf(gate11));
+        check("11.9 adopted layer got a depth-ranked NN_ prefix",
+              adoptL.name.match(/^\d\d_/) !== null, adoptL.name);
+
+
+        // ============ TEST 12: NON-100% BASE SCALE (defect #1 fix) ============
+        // Real art is rarely at 100%. Build must project from each layer's own
+        // scale and never disturb frame 0. Proven by an md5 frame-0 lock on a
+        // scaled full-frame plate, plus per-axis projection math.
+
+        PXE.reset();
+        var zoom12 = comp.width * 50 / 36;
+        var gate12 = findL(comp, "02_gate11");   // full-frame plate, visible
+        gate12.scale.setValue([130, 130, 100]);
+        saveFrame(comp, 0, "f_scaled_flat.png");  // the art, already at 130%
+        var rB12 = PXE.buildFromComp(6000);
+        check("12.1 build OK on a scaled layer", rB12.indexOf("OK") === 0, rB12.split("\n")[0]);
+        comp.time = 0;
+        saveFrame(comp, 0, "f_scaled_built.png"); // must equal the flat art (md5)
+        var fg = (zoom12 + zOf(gate12)) / zoom12, sg = gate12.scale.value;
+        check("12.2 scaled plate projects from its own base (130), not 100",
+              near(sg[0], 130 * fg, 1) && near(sg[1], 130 * fg, 1),
+              sg[0].toFixed(1) + " vs " + (130 * fg).toFixed(1));
+
+        PXE.reset();
+        var sky12 = findL(comp, "01_sky11");
+        sky12.scale.setValue([80, 120, 100]);     // non-uniform torture test
+        PXE.buildFromComp(6000);
+        comp.time = 0;
+        var fs = (zoom12 + zOf(sky12)) / zoom12, ss = sky12.scale.value;
+        check("12.3 non-uniform base scale preserved (x,y independent)",
+              near(ss[0], 80 * fs, 1) && near(ss[1], 120 * fs, 1),
+              ss[0].toFixed(1) + "," + ss[1].toFixed(1));
+
+        PXE.reset();
+        var sr = sky12.scale.value;
+        check("12.4 reset restores base scale, not 100 (defect #1)",
+              near(sr[0], 80) && near(sr[1], 120), sr[0] + "," + sr[1]);
+        // restore the fixture to 100% so nothing downstream inherits the scale
+        gate12.scale.setValue([100, 100, 100]);
+        sky12.scale.setValue([100, 100, 100]);
+        PXE.buildFromComp(5000);
+
+
+        // ============ TEST 13: RIG ADDS ZERO ERROR AT DEEP SCALE ============
+        // Isolates Parallaxie's own geometric error from AE's bitmap resampling.
+        // Fractal Noise is procedural: AE re-renders it at the layer's final
+        // resolution, so it does NOT resample when scaled (unlike an imported
+        // bitmap). Put it on a full-frame plate, force the plate to z=4000 so the
+        // projection scales it ~250%, and frame 0 must come back BYTE-IDENTICAL:
+        // proof the rig's projection is exact even under heavy scaling.
+        // (On real imported raster art the same scaling costs <=~3/255 of AE
+        // bitmap resampling - measured on Battlemarked hero art, documented in
+        // CLAUDE.md; the fixture stays external-file-free so it cannot show that
+        // here, and it does not need to - the error being isolated is the rig's.)
+
+        PXE.reset();
+        var rp = findL(comp, "02_gate11");   // full-frame plate (bleed, off-centre)
+        // Isolate the plate so the WHOLE frame is its resampling detail - otherwise
+        // nearer planes occlude it and the frame is unchanged solids (delta 0).
+        var vis13 = [];
+        for (i = 1; i <= comp.numLayers; i++) {
+            var L13 = comp.layer(i);
+            if (L13 === rp || (L13 instanceof CameraLayer)) continue;
+            if (L13.enabled) { vis13.push(L13); L13.enabled = false; }
+        }
+        var rfx = rp.property("ADBE Effect Parade").addProperty("ADBE Fractal Noise");
+        saveFrame(comp, 0, "f_deepscale_flat.png");  // flat 2D, procedural detail at 100%
+        PXE.buildFromComp(6000);
+        PXE.setDepth(rp.name, 4000);                 // deep -> clearly scaled by projection
+        comp.time = 0;
+        saveFrame(comp, 0, "f_deepscale_built.png"); // same plate scaled ~250% at z=4000
+        check("13.1 procedural plate rigged and scaled deep",
+              !isNaN(zOf(rp)), "z=" + Math.round(zOf(rp)));
+        check("13.2 raster plate scaled deep by projection (z>0)",
+              zOf(rp) > 0, "z=" + Math.round(zOf(rp)));
+        try { rfx.remove(); } catch (e13) {}
+        for (i = 0; i < vis13.length; i++) vis13[i].enabled = true;
+        PXE.buildFromComp(5000);
+
+
+        // ============ TEST 14: KEYFRAMED TRANSFORMS REFUSED / SAFE (defect #3) ============
+        // Parallaxie's projection assumes a STATIC base transform. A layer that
+        // already animates would have its keyframes silently hidden under the
+        // rig's expressions, and setValue on a keyed property throws mid-Bake/
+        // Reset. So Build refuses keyed layers (preflight BLOCKS them), and
+        // Bake/Reset guard every setValue so they never throw.
+
+        PXE.reset();
+        var kl = findL(comp, "02_gate11");
+        var pv0 = kl.position.value, pv1 = pv0.slice(); pv1[0] = pv0[0] + 60;
+        kl.position.setValueAtTime(0, pv0);
+        kl.position.setValueAtTime(1, pv1);
+        var pf14 = PXE.preflight();
+        check("14.1 preflight BLOCKS a keyed transform layer",
+              pf14.indexOf("BLOCKER") !== -1 && pf14.indexOf("keyframe") !== -1 &&
+              pf14.indexOf("02_gate11") !== -1, "blocker present");
+        var b14 = PXE.buildFromComp(5000);
+        check("14.2 build REFUSES keyed transforms, no partial rig",
+              b14.indexOf("ERROR") === 0 && b14.indexOf("keyframe") !== -1 && isNaN(zOf(kl)),
+              b14.substr(0, 64));
+        while (kl.position.numKeys > 0) kl.position.removeKey(1);
+        var b14b = PXE.buildFromComp(5000);
+        check("14.3 build succeeds once the keys are removed",
+              b14b.indexOf("OK") === 0 && !isNaN(zOf(kl)), b14b.split("\n")[0]);
+        // keys added to an already-rigged layer must not throw Bake
+        var kv = kl.position.value, kv1 = kv.slice(); kv1[0] = kv[0] + 10;
+        kl.position.setValueAtTime(0, kv);
+        kl.position.setValueAtTime(1, kv1);
+        var bake14 = PXE.bake();
+        check("14.4 bake handles a keyed rigged layer without throwing",
+              bake14.indexOf("OK") === 0, bake14.split("\n")[0]);
+        // rebuild and prove Reset is equally safe
+        var klc = findL(comp, "02_gate11");
+        while (klc.position.numKeys > 0) klc.position.removeKey(1);
+        PXE.buildFromComp(5000);
+        var klr = findL(comp, "02_gate11");
+        var rv = klr.position.value, rv1 = rv.slice(); rv1[0] = rv[0] + 10;
+        klr.position.setValueAtTime(0, rv);
+        klr.position.setValueAtTime(1, rv1);
+        var reset14 = PXE.reset();
+        check("14.5 reset handles keyed layers without throwing",
+              reset14.indexOf("OK") === 0, reset14.split("\n")[0]);
+        // cleanup: strip keys, rebuild a clean baseline
+        var klf = findL(comp, "02_gate11");
+        while (klf.position.numKeys > 0) klf.position.removeKey(1);
         PXE.buildFromComp(5000);
 
     } catch (err) {

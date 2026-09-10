@@ -1,0 +1,8 @@
+# Normalise every text file to LF in the repo and in the working tree, on every
+# platform, so a Windows clone does not show phantom CRLF diffs.
+* text=auto eol=lf
+
+# Binary assets: never diffed, never end-of-line converted.
+*.psd binary
+*.psb binary
+*.png binary
