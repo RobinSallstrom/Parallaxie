@@ -52,7 +52,7 @@ export const isCEPHost = (): boolean =>
  * one knowingly platform-specific string in the panel. Override without
  * rebuilding via localStorage key "pxe.enginePath" in the panel's DevTools.
  */
-const DEV_ENGINE_PATH = "C:/Projects/Parallaxie/Parallaxie_v1.jsx";
+const DEV_ENGINE_PATH = "C:/Users/Resolution Games/Documents/Projects/Parallaxie/Parallaxie_v1.jsx";
 
 const enginePath = (): string => {
   try {

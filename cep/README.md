@@ -63,7 +63,7 @@ optimistic-update and reconciliation paths run without AE.
 
 Engine loading in dev: on the first engine call the bridge asks the
 ExtendScript shim to `$.evalFile()` the engine. The path defaults to
-`C:/Projects/Parallaxie/Parallaxie_v1.jsx` (see `DEV_ENGINE_PATH` in
+`C:/Users/Resolution Games/Documents/Projects/Parallaxie/Parallaxie_v1.jsx` (see `DEV_ENGINE_PATH` in
 `src/js/lib/pxe/bridge.ts`); override it without rebuilding by setting
 localStorage key `pxe.enginePath` in the panel's DevTools console, e.g.
 `localStorage.setItem("pxe.enginePath", "/Users/you/Parallaxie/Parallaxie_v1.jsx")`.
