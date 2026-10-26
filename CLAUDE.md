@@ -130,3 +130,21 @@ This repo is the engine, its harness and its documentation. It has no upstream p
 and no downstream shot folder. If a change only makes sense for one particular piece of
 artwork, it does not belong here; it belongs in a preset or a fixture variant, and the
 suite must still pass.
+
+## Portfolio roadmap (cross-project)
+
+This project is **`parallaxie`** in Robin's portfolio roadmap. Its tier and rank live in the entry — read them, don't assume.
+Data: `~/Documents/Projects/portfolio-roadmap/roadmap.json` — its own git repo (`RobinSallstrom/portfolio-roadmap`, private).
+**Git is the record:** every computer syncs through it, and ROBO-OS reads it from GitHub (and commits its own edits there).
+The HTML board and the ROBO-OS board are renderings — never edit those; edit the JSON.
+Folder missing on this machine? `gh repo clone RobinSallstrom/portfolio-roadmap ~/Documents/Projects/portfolio-roadmap`
+
+- **Session start:** `git -C ~/Documents/Projects/portfolio-roadmap pull --ff-only`, then read this project's entry — tier, `tierNote`, `milestones`, `triggers`, `nextAction`, `blockers`.
+  `python3 -c "import json;p=[x for x in json.load(open('$HOME/Documents/Projects/portfolio-roadmap/roadmap.json'))['projects'] if x['id']=='parallaxie'][0];print(json.dumps(p,indent=2,ensure_ascii=False))"`
+- **Wrap-up (alongside PROGRESS.md):** pull again, then update the entry — set finished milestones to `"status":"done"` with a `"date"`,
+  mark the one you're on `"in_progress"`, add new milestones only if they're coarse (5–10 per project, never task-level),
+  refresh `currentPhase`, `nextAction`, `lastActivity`, `percentComplete`, and the `git` counts. Then commit and push it:
+  `git -C ~/Documents/Projects/portfolio-roadmap add roadmap.json && git -C ~/Documents/Projects/portfolio-roadmap commit -m "roadmap(parallaxie): <what moved>" && git -C ~/Documents/Projects/portfolio-roadmap push`
+  Push rejected → `pull --rebase`, push again. Offline → leave the commit; the next session's push carries it.
+- **Never change** `tier`, `tierRank`, `tierNote`, `scores`, `triggers` or `ownership` — those are Robin's decisions, made in review.
+- Milestone `status` ∈ pending · in_progress · done · dropped. Keep valid JSON (`python3 -m json.tool` on the file), 2-space indent. Do not reformat the whole file, and do not bump `version` — git history is the version.
